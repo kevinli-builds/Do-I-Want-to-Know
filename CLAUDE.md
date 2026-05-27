@@ -23,7 +23,7 @@ Claude Code sessions — no external team.
 | Backend | Node.js + Express |
 | ORM | Prisma v5 |
 | Database | PostgreSQL (Neon.tech free tier) |
-| AI extraction | Anthropic Claude API (`claude-opus-4-5`) |
+| AI extraction | Anthropic Claude API (`claude-haiku-4-5`) |
 | Auth | Google OAuth 2.0 (gmail.readonly + userinfo.email scopes) |
 | Hosting | Render.com (free web service) |
 | Secrets | `.env` file (never committed — gitignored) |
@@ -185,15 +185,29 @@ npm start
 
 ---
 
-## Pending / Next Steps
+## Current Status (as of May 2026)
 
-- [ ] Set up Google Cloud project and create OAuth 2.0 credentials
-- [ ] Deploy backend to Render, set all env vars
-- [ ] Update `app/app.json` `extra.apiUrl` to the Render URL
-- [ ] Test full OAuth + sync + Wrapped flow end-to-end
-- [ ] (Optional) Add a "Disconnect Gmail" button
-- [ ] (Optional) Improve Wrapped UI with charts/animations
-- [ ] (Optional) Add year filter to see stats for a specific year
+**All code is written and TypeScript compiles clean. The app has never been run end-to-end — it is ready to deploy but no infrastructure has been set up yet.**
+
+### ✅ Done
+- Full backend: OAuth flow, Gmail fetching, Claude extraction, LedgerEntry storage, Wrapped stats aggregation
+- Full app: ConnectScreen, WrappedScreen, device UUID persistence
+- PostgreSQL schema + migrations
+- Render deployment config (`render.yaml`)
+- Switched extraction model from `claude-opus-4-5` → `claude-haiku-4-5` (~20× cheaper, sufficient for the task)
+
+### 🔜 Next session — Deployment (in order)
+1. **Google Cloud Console** — create a project, enable Gmail API, create OAuth 2.0 credentials, add the Render callback URL
+2. **Neon.tech** — create a free PostgreSQL project, copy the connection string
+3. **Render.com** — create a new web service pointing at this repo, set all 5 env vars (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `BASE_URL`)
+4. **App** — update `app/app.json` `extra.apiUrl` to the live Render URL
+5. **Test** — full OAuth + sync + Wrapped flow on a real device
+
+### 💡 Future ideas (post-launch)
+- Add a "Disconnect Gmail" button
+- Improve Wrapped UI with charts / animations
+- Add year filter to see stats for a specific year
+- Surface more insights (e.g. "you spend most on Tuesdays", subscription cost per month)
 
 ---
 
