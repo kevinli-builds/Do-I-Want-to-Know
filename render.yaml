@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: diwtkn-backend
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install && npm run db:generate && npm run build
+    startCommand: npm run start:prod
+    envVars:
+      - key: DATABASE_URL
+        sync: false        # You'll paste this in from Neon
+      - key: NODE_ENV
+        value: production

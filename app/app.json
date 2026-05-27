@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "Do I Want To Know",
+    "slug": "do-i-want-to-know",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#0a0a0a"
+    },
+    "scheme": "diwtkn",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.diwtkn.app"
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#0a0a0a"
+      },
+      "package": "com.diwtkn.app",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "diwtkn"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
+    },
+    "extra": {
+      "apiUrl": "http://localhost:3000"
+    }
+  }
+}

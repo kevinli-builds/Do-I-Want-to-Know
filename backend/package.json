@@ -1,0 +1,29 @@
+{
+  "name": "diwtkn-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "node node_modules/ts-node-dev/lib/bin.js --respawn --transpile-only src/index.ts",
+    "build": "node node_modules/typescript/bin/tsc",
+    "start": "node dist/index.js",
+    "start:prod": "node node_modules/prisma/build/index.js migrate deploy && node dist/index.js",
+    "db:migrate": "node node_modules/prisma/build/index.js migrate dev",
+    "db:generate": "node node_modules/prisma/build/index.js generate",
+    "db:studio": "node node_modules/prisma/build/index.js studio"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.36.0",
+    "@prisma/client": "^5.22.0",
+    "axios": "^1.7.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.17",
+    "@types/express": "^4.17.21",
+    "@types/node": "^20.16.0",
+    "prisma": "^5.22.0",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.6.0"
+  }
+}
