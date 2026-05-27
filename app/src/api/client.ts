@@ -6,53 +6,43 @@ const BASE_URL: string =
 
 export const api = axios.create({ baseURL: BASE_URL })
 
-export type QuestionType = 'yesno' | 'multiplechoice'
+/** Returns the URL the app opens in a browser for the Gmail OAuth flow */
+export function getConnectUrl(userId: string): string {
+  return `${BASE_URL}/auth/google?userId=${encodeURIComponent(userId)}`
+}
 
-export interface Question {
+export interface UserStatus {
   id: string
-  text: string
-  type: QuestionType
-  options: string | null
-  authorId: string
+  email: string | null
+  connected: boolean
   createdAt: string
-  status: string
 }
 
-export interface QuestionWithResults extends Question {
-  answerCount: number
-  results: Record<string, number>
+export interface WrappedStats {
+  connected: boolean
+  email: string | null
+  totalEntries: number
+  stats: {
+    totalSpend: number
+    byCategory: Record<string, { count: number; spend: number }>
+    topVendors: { vendor: string; count: number }[]
+    mostExpensive: {
+      vendor: string
+      amount: number | null
+      description: string
+      date: string
+    } | null
+    monthlySpend: Record<string, number>
+    subscriptions: string[]
+    subscriptionCount: number
+  } | null
 }
 
-export const createUser = (id: string) =>
-  api.post('/users', { id }).then(r => r.data)
+export const upsertUser = (id: string) =>
+  api.post<UserStatus>('/users', { id }).then(r => r.data)
 
-export const getFeed = (userId: string) =>
-  api.get<Question[]>('/questions/feed', { params: { userId } }).then(r => r.data)
+export const syncEmails = (userId: string) =>
+  api.post<{ synced: number; total: number }>('/emails/sync', { userId }).then(r => r.data)
 
-export const getMyQuestions = (userId: string) =>
-  api.get<QuestionWithResults[]>('/questions/mine', { params: { userId } }).then(r => r.data)
-
-export const postQuestion = (body: {
-  authorId: string
-  text: string
-  type: QuestionType
-  options?: string[]
-}) => api.post<Question>('/questions', body).then(r => r.data)
-
-export interface UserStats {
-  answeredCount: number
-  askedCount: number
-  totalResponsesReceived: number
-  memberSince: string
-}
-
-export const getUserStats = (userId: string) =>
-  api.get<UserStats>(`/users/${userId}/stats`).then(r => r.data)
-
-export const answerQuestion = (questionId: string, userId: string, value: string) =>
-  api
-    .post<{ results: Record<string, number>; total: number }>(
-      `/questions/${questionId}/answer`,
-      { userId, value }
-    )
-    .then(r => r.data)
+export const getWrapped = (userId: string) =>
+  api.get<WrappedStats>(`/wrapped/${userId}`).then(r => r.data)

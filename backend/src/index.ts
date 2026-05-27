@@ -1,15 +1,19 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
-import { questionsRouter } from './routes/questions'
 import { usersRouter } from './routes/users'
+import { authRouter } from './routes/auth'
+import { emailsRouter } from './routes/emails'
+import { wrappedRouter } from './routes/wrapped'
 
 const app = express()
 app.use(cors())
 app.use(express.json())
 
-app.use('/questions', questionsRouter)
 app.use('/users', usersRouter)
+app.use('/auth', authRouter)
+app.use('/emails', emailsRouter)
+app.use('/wrapped', wrappedRouter)
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 
@@ -27,13 +31,12 @@ app.get('/privacy', (_req, res) => {
     .wrap { max-width: 680px; margin: 0 auto; }
     h1 { font-size: 28px; font-weight: 800; margin: 48px 0 4px; }
     .meta { color: #888; font-size: 14px; margin-bottom: 40px; }
-    h2 { font-size: 17px; font-weight: 700; margin: 36px 0 10px; color: #1a1a2e; }
+    h2 { font-size: 17px; font-weight: 700; margin: 36px 0 10px; }
     p, li { font-size: 15px; line-height: 1.7; color: #444; }
     ul { padding-left: 20px; margin-top: 8px; }
     li { margin-bottom: 4px; }
     hr { border: none; border-top: 1px solid #e8e8e8; margin: 32px 0; }
     a { color: #6C63FF; }
-    .pill { display: inline-block; background: #f0eeff; color: #6C63FF; border-radius: 100px; padding: 4px 14px; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
   </style>
 </head>
 <body>
@@ -41,68 +44,46 @@ app.get('/privacy', (_req, res) => {
     <h1>Privacy Policy</h1>
     <p class="meta">Do I Want To Know &nbsp;·&nbsp; Last updated: May 2026</p>
 
-    <h2>What this app is</h2>
-    <p>Do I Want To Know is a survey platform. You can post questions, answer questions posted by others, and see aggregated results. The app is designed to work without requiring any personal information.</p>
+    <h2>What this app does</h2>
+    <p>Do I Want To Know connects to your Gmail account (with your permission) to read purchase and subscription email metadata, then generates a personal "Wrapped" summary of your spending and subscriptions — like Spotify Wrapped, but for your inbox.</p>
 
     <hr />
 
     <h2>What we collect</h2>
-    <p><strong>What we do collect</strong></p>
     <ul>
-      <li><strong>A random device ID</strong> — when you first open the app, a random identifier (UUID) is generated on your device and stored locally. It contains no personal information.</li>
-      <li><strong>Questions you post</strong> — the text, answer type, and options.</li>
-      <li><strong>Answers you submit</strong> — your selected answer to questions in the feed.</li>
-      <li><strong>Timestamps</strong> — when questions were posted and answers submitted.</li>
+      <li><strong>A random device ID</strong> — a UUID generated on your device, containing no personal information.</li>
+      <li><strong>Your Gmail address</strong> — used to identify your account after you connect.</li>
+      <li><strong>Email metadata only</strong> — sender, subject line, date, and a short snippet from order/subscription emails. We never read the full body of any email.</li>
+      <li><strong>Extracted purchase data</strong> — vendor name, category, amount, and date parsed from the metadata above.</li>
     </ul>
-    <br />
-    <p><strong>What we do NOT collect</strong></p>
+
+    <hr />
+
+    <h2>What we do NOT collect</h2>
     <ul>
-      <li>Your name, email address, or phone number</li>
-      <li>Your location</li>
-      <li>Your contacts or address book</li>
-      <li>Any information from other apps</li>
-      <li>Photos, camera, or microphone access</li>
+      <li>The full text or attachments of any email</li>
+      <li>Personal or non-commercial emails (we only query order/subscription subjects)</li>
+      <li>Your contacts, calendar, location, or any other data</li>
     </ul>
 
     <hr />
 
     <h2>How we use your data</h2>
-    <ul>
-      <li>To show your questions to other users in the feed</li>
-      <li>To record your answers so you are not shown the same question twice</li>
-      <li>To calculate and display aggregate results</li>
-      <li>To show you the questions you have posted and their results</li>
-    </ul>
-    <p style="margin-top:10px">We do not use your data for advertising, profiling, or any purpose beyond operating the app.</p>
+    <p>All data is used exclusively to generate your personal Wrapped stats. We do not sell, share, or monetize your data in any form.</p>
 
     <hr />
 
-    <h2>Who we share data with</h2>
-    <p>We do not sell, rent, or share your data with third parties for commercial purposes. Aggregate, anonymised results may be visible to any user who answers a question.</p>
-
-    <hr />
-
-    <h2>Data retention &amp; deletion</h2>
-    <p>Questions and answers are retained for as long as the app is operational. To request deletion of your data, contact us with your device ID and we will remove it within 30 days.</p>
-
-    <hr />
-
-    <h2>Children</h2>
-    <p>This app is not directed at children under 13. We do not knowingly collect data from children under 13.</p>
-
-    <hr />
-
-    <h2>Changes</h2>
-    <p>If we make material changes to this policy we will update the date above and notify users through the app where appropriate.</p>
+    <h2>Data deletion</h2>
+    <p>Email <a href="mailto:privacy@diwtkn.com">privacy@diwtkn.com</a> to request deletion. We will remove all your data within 30 days.</p>
 
     <hr />
 
     <h2>Contact</h2>
-    <p>Questions? Email us at <a href="mailto:privacy@diwtkn.com">privacy@diwtkn.com</a></p>
+    <p><a href="mailto:privacy@diwtkn.com">privacy@diwtkn.com</a></p>
   </div>
 </body>
 </html>`)
 })
 
 const PORT = process.env.PORT ?? 3000
-app.listen(PORT, () => console.log(`Survey backend running on http://localhost:${PORT}`))
+app.listen(PORT, () => console.log(`DIWTKN backend running on http://localhost:${PORT}`))

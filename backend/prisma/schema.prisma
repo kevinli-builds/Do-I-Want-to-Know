@@ -8,32 +8,35 @@ datasource db {
 }
 
 model User {
-  id        String     @id
-  createdAt DateTime   @default(now())
-  questions Question[]
-  answers   Answer[]
+  id         String        @id          // device UUID
+  email      String?       @unique      // Gmail address, set after OAuth
+  createdAt  DateTime      @default(now())
+  oauthToken OAuthToken?
+  ledger     LedgerEntry[]
 }
 
-model Question {
-  id        String   @id @default(cuid())
-  text      String
-  type      String   // "yesno" | "multiplechoice"
-  options   String?  // JSON: string[] for MC options
-  authorId  String
-  author    User     @relation(fields: [authorId], references: [id])
-  createdAt DateTime @default(now())
-  status    String   @default("active")
-  answers   Answer[]
+model OAuthToken {
+  id           String   @id @default(cuid())
+  userId       String   @unique
+  user         User     @relation(fields: [userId], references: [id])
+  accessToken  String
+  refreshToken String
+  expiresAt    DateTime
+  updatedAt    DateTime @updatedAt
 }
 
-model Answer {
-  id         String   @id @default(cuid())
-  questionId String
-  question   Question @relation(fields: [questionId], references: [id])
-  userId     String
-  user       User     @relation(fields: [userId], references: [id])
-  value      String
-  createdAt  DateTime @default(now())
+model LedgerEntry {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  category    String   // order | subscription | travel | food | entertainment | other
+  vendor      String
+  amount      Float?
+  currency    String   @default("USD")
+  date        DateTime
+  description String
+  emailId     String   // Gmail message ID — used for deduplication
+  createdAt   DateTime @default(now())
 
-  @@unique([questionId, userId])
+  @@unique([userId, emailId])
 }
