@@ -8,6 +8,16 @@ interface Props {
   userId: string
 }
 
+function safeParseOptions(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 const MC_COLORS = ['#6C63FF', '#FF6584', '#43B89C', '#F7B731']
 const YESNO = { yes: '#43B89C', no: '#FF6584' }
 
@@ -17,7 +27,7 @@ export function QuestionCard({ question, userId }: Props) {
   const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(false)
 
-  const options: string[] = question.options ? JSON.parse(question.options) : []
+  const options: string[] = safeParseOptions(question.options)
 
   async function handleAnswer(value: string) {
     if (answered || loading) return

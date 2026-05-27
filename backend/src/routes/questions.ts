@@ -6,7 +6,7 @@ const router = Router()
 // Questions this user hasn't answered yet (excludes their own)
 router.get('/feed', async (req, res) => {
   const { userId } = req.query as { userId: string }
-  if (!userId) return res.status(400).json({ error: 'userId required' })
+  if (!userId) return void res.status(400).json({ error: 'userId required' })
 
   const answered = await prisma.answer.findMany({
     where: { userId },
@@ -30,7 +30,7 @@ router.get('/feed', async (req, res) => {
 // Questions created by this user, with live results
 router.get('/mine', async (req, res) => {
   const { userId } = req.query as { userId: string }
-  if (!userId) return res.status(400).json({ error: 'userId required' })
+  if (!userId) return void res.status(400).json({ error: 'userId required' })
 
   const questions = await prisma.question.findMany({
     where: { authorId: userId },
@@ -52,13 +52,17 @@ router.get('/mine', async (req, res) => {
 router.post('/', async (req, res) => {
   const { authorId, text, type, options } = req.body
   if (!authorId || !text || !type)
-    return res.status(400).json({ error: 'authorId, text, type required' })
+    return void res.status(400).json({ error: 'authorId, text, type required' })
+
+  // Guard: options must be an array if provided
+  if (options !== undefined && !Array.isArray(options))
+    return void res.status(400).json({ error: 'options must be an array' })
 
   const question = await prisma.question.create({
     data: {
       text,
       type,
-      options: options ? JSON.stringify(options) : null,
+      options: Array.isArray(options) ? JSON.stringify(options) : null,
       authorId,
     },
   })
@@ -70,12 +74,12 @@ router.post('/:id/answer', async (req, res) => {
   const { userId, value } = req.body
   const { id } = req.params
   if (!userId || value === undefined)
-    return res.status(400).json({ error: 'userId, value required' })
+    return void res.status(400).json({ error: 'userId, value required' })
 
   try {
     await prisma.answer.create({ data: { questionId: id, userId, value } })
   } catch (e: any) {
-    if (e.code === 'P2002') return res.status(409).json({ error: 'Already answered' })
+    if (e.code === 'P2002') return void res.status(409).json({ error: 'Already answered' })
     throw e
   }
 
@@ -83,7 +87,7 @@ router.post('/:id/answer', async (req, res) => {
     where: { id },
     include: { answers: true },
   })
-  if (!question) return res.status(404).json({ error: 'Not found' })
+  if (!question) return void res.status(404).json({ error: 'Not found' })
 
   const results = tally(question.type, question.options, question.answers.map(a => a.value))
   res.json({ results, total: question.answers.length })
@@ -95,11 +99,21 @@ router.get('/:id/results', async (req, res) => {
     where: { id: req.params.id },
     include: { answers: true },
   })
-  if (!question) return res.status(404).json({ error: 'Not found' })
+  if (!question) return void res.status(404).json({ error: 'Not found' })
 
   const results = tally(question.type, question.options, question.answers.map(a => a.value))
   res.json({ results, total: question.answers.length })
 })
+
+function safeParseOptions(optionsJson: string | null): string[] {
+  if (!optionsJson) return []
+  try {
+    const parsed = JSON.parse(optionsJson)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
 
 function tally(
   type: string,
@@ -112,7 +126,7 @@ function tally(
       no: values.filter(v => v === 'no').length,
     }
   }
-  const options: string[] = optionsJson ? JSON.parse(optionsJson) : []
+  const options = safeParseOptions(optionsJson)
   const counts: Record<string, number> = {}
   options.forEach((_, i) => { counts[String(i)] = 0 })
   values.forEach(v => { counts[v] = (counts[v] || 0) + 1 })

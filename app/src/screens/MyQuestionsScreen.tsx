@@ -8,8 +8,18 @@ import { getUserId } from '../lib/userId'
 const MC_COLORS = ['#6C63FF', '#FF6584', '#43B89C', '#F7B731']
 const YESNO = { yes: '#43B89C', no: '#FF6584' }
 
+function safeParseOptions(raw: string | null): string[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw)
+    return Array.isArray(parsed) ? parsed : []
+  } catch {
+    return []
+  }
+}
+
 function QuestionRow({ q }: { q: QuestionWithResults }) {
-  const options: string[] = q.options ? JSON.parse(q.options) : []
+  const options: string[] = safeParseOptions(q.options)
 
   return (
     <View style={s.card}>
@@ -47,12 +57,16 @@ export function MyQuestionsScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => { getUserId().then(setUserId) }, [])
+  useEffect(() => {
+    getUserId().then(setUserId).catch(() => setLoading(false))
+  }, [])
 
   const load = useCallback(async () => {
     if (!userId) return
     try {
       setQuestions(await getMyQuestions(userId))
+    } catch {
+      // network or server error — leave current list in place
     } finally {
       setLoading(false)
       setRefreshing(false)

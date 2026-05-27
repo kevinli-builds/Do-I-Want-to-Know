@@ -1,7 +1,8 @@
 import axios from 'axios'
+import Constants from 'expo-constants'
 
-// Change to your machine's local IP (e.g. http://192.168.1.x:3000) when testing on a physical device
-const BASE_URL = 'http://localhost:3000'
+const BASE_URL: string =
+  Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000'
 
 export const api = axios.create({ baseURL: BASE_URL })
 

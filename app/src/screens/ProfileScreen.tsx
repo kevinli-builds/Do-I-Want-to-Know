@@ -42,12 +42,16 @@ export function ProfileScreen() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
-  useEffect(() => { getUserId().then(setUserId) }, [])
+  useEffect(() => {
+    getUserId().then(setUserId).catch(() => setLoading(false))
+  }, [])
 
   const load = useCallback(async () => {
     if (!userId) return
     try {
       setStats(await getUserStats(userId))
+    } catch {
+      // network or server error — leave current stats in place
     } finally {
       setLoading(false)
       setRefreshing(false)

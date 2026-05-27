@@ -5,7 +5,7 @@ const router = Router()
 
 router.post('/', async (req, res) => {
   const { id } = req.body
-  if (!id) return res.status(400).json({ error: 'id required' })
+  if (!id) return void res.status(400).json({ error: 'id required' })
 
   const user = await prisma.user.upsert({
     where: { id },
@@ -19,7 +19,7 @@ router.get('/:id/stats', async (req, res) => {
   const { id } = req.params
 
   const user = await prisma.user.findUnique({ where: { id } })
-  if (!user) return res.status(404).json({ error: 'Not found' })
+  if (!user) return void res.status(404).json({ error: 'Not found' })
 
   const [answeredCount, askedCount, myQuestions] = await Promise.all([
     prisma.answer.count({ where: { userId: id } }),
