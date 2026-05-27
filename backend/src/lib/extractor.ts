@@ -30,7 +30,7 @@ export async function extractEntries(
       .join('\n\n---\n\n')
 
     const msg = await anthropic.messages.create({
-      model: 'claude-opus-4-5',
+      model: 'claude-haiku-4-5',
       max_tokens: 4096,
       system: `You extract structured purchase/subscription/travel data from email metadata.
 For each email, return null if it is NOT a purchase, subscription, booking, or delivery confirmation.
