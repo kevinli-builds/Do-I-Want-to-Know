@@ -8,11 +8,12 @@ datasource db {
 }
 
 model User {
-  id         String        @id          // device UUID
-  email      String?       @unique      // Gmail address, set after OAuth
-  createdAt  DateTime      @default(now())
-  oauthToken OAuthToken?
-  ledger     LedgerEntry[]
+  id           String        @id          // device UUID
+  email        String?       @unique      // Gmail address, set after OAuth
+  createdAt    DateTime      @default(now())
+  lastSyncedAt DateTime?                  // last successful /emails/sync — used for rate limiting
+  oauthToken   OAuthToken?
+  ledger       LedgerEntry[]
 }
 
 model OAuthToken {

@@ -10,17 +10,43 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email',
 ]
 
-// Step 1 — redirect user to Google's consent screen
-// The mobile app opens: GET /auth/google?userId=<deviceUUID>
+// OAuth `state` carries the device UUID + where to send the browser afterwards.
+// Encoded as base64url JSON so it survives the round-trip through Google.
+function encodeState(data: { userId: string; redirect?: string }): string {
+  return Buffer.from(JSON.stringify(data)).toString('base64url')
+}
+
+function decodeState(state: string): { userId: string; redirect?: string } {
+  try {
+    const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'))
+    if (parsed && typeof parsed.userId === 'string') return parsed
+  } catch {
+    /* fall through */
+  }
+  // Backward compat: the old mobile app sent the raw userId as state
+  return { userId: state }
+}
+
+// Only allow redirecting back to known frontends — prevents open-redirect abuse.
+function safeRedirect(redirect?: string): string | null {
+  if (!redirect) return null
+  if (process.env.FRONTEND_URL && redirect === process.env.FRONTEND_URL) return redirect
+  if (/^http:\/\/localhost(:\d+)?$/.test(redirect)) return redirect
+  return null
+}
+
+// Step 1 — redirect the user to Google's consent screen.
+// Web app opens: GET /auth/google?userId=<uuid>&redirect=<frontend origin>
 router.get('/google', (req, res) => {
   const userId = req.query.userId as string
   if (!userId) return void res.status(400).send('userId required')
+  const redirect = req.query.redirect as string | undefined
 
   const oauth2Client = getOAuthClient()
   const url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     scope: SCOPES,
-    state: userId,   // passed back in callback so we know which device to associate
+    state: encodeState({ userId, redirect }),
     prompt: 'consent', // always show consent so we get a refresh token
   })
 
@@ -29,8 +55,10 @@ router.get('/google', (req, res) => {
 
 // Step 2 — Google redirects here after the user approves
 router.get('/google/callback', async (req, res) => {
-  const { code, state: userId } = req.query as { code: string; state: string }
-  if (!code || !userId) return void res.status(400).send('Invalid callback parameters')
+  const { code, state } = req.query as { code: string; state: string }
+  if (!code || !state) return void res.status(400).send('Invalid callback parameters')
+
+  const { userId, redirect } = decodeState(state)
 
   const oauth2Client = getOAuthClient()
   const { tokens } = await oauth2Client.getToken(code)
@@ -65,7 +93,13 @@ router.get('/google/callback', async (req, res) => {
     },
   })
 
-  // Show a "you can close this tab" page
+  // Web flow: redirect back to the frontend so it can show the dashboard.
+  const target = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
+  if (target) {
+    return void res.redirect(`${target}/?connected=1`)
+  }
+
+  // Fallback (mobile / no frontend configured): show a "close this tab" page
   res.send(`<!DOCTYPE html>
 <html lang="en">
 <head>

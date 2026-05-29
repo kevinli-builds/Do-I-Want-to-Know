@@ -60,8 +60,23 @@ Do I Want To Know/
 │   │   ├── schema.prisma       Models: User, OAuthToken, LedgerEntry
 │   │   └── migrations/
 │   │       ├── 20260526013950_init/           Original migration (survey platform tables)
-│   │       └── 20260527000000_gmail_wrapped/  Drops survey tables, adds email/OAuth/ledger
+│   │       ├── 20260527000000_gmail_wrapped/  Drops survey tables, adds email/OAuth/ledger
+│   │       └── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
+├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
+│   ├── app/
+│   │   ├── layout.tsx          Root layout + metadata
+│   │   ├── page.tsx            Client page: init UUID, upsert user, render Connect vs Wrapped
+│   │   ├── globals.css         All styling (purple #6c63ff theme)
+│   │   ├── lib/
+│   │   │   ├── userId.ts       Device UUID via crypto.randomUUID() + localStorage
+│   │   │   └── api.ts          fetch() client for the Render backend + type defs
+│   │   └── components/
+│   │       ├── ConnectView.tsx "Connect Gmail" landing — full-page redirect to OAuth
+│   │       └── WrappedView.tsx Dashboard — Sync button + all stat cards, handles 429 rate-limit
+│   ├── next.config.js
+│   ├── tsconfig.json
+│   └── package.json            Next 16 + React 19 (App Router, static export)
 ├── render.yaml                 Render deployment config (service: diwtkn-backend)
 ├── PRIVACY_POLICY.md
 └── .gitignore                  Excludes: node_modules, dist, .env, *.db, .expo, .claude
@@ -86,17 +101,30 @@ Do I Want To Know/
    - Persists structured `LedgerEntry` rows (vendor, category, amount, currency, date)
 10. `GET /wrapped/:userId` aggregates all LedgerEntry rows into stats
 
+### Web app flow (`web/`, primary client)
+1. **Page load** → `getUserId()` reads/creates a UUID in `localStorage`; `POST /users` checks connection status
+2. Not connected → **ConnectView**. "Connect Gmail" does a full-page redirect to `GET /auth/google?userId=<uuid>&redirect=<web origin>`
+3. After Google consent, the callback stores tokens and **redirects back to `<web origin>/?connected=1`**
+4. The page detects `?connected=1`, cleans the URL, re-fetches status, and renders **WrappedView**
+5. "Sync Emails" → `POST /emails/sync`. If the user synced within `SYNC_RATE_LIMIT_HOURS`, the backend returns **429** with a friendly message that the UI surfaces
+
+### Rate limiting
+- `User.lastSyncedAt` is stamped on every successful sync (including "already up to date")
+- `/emails/sync` rejects with 429 if the last sync was within `SYNC_RATE_LIMIT_HOURS` (env, default 24; set `0` to disable)
+- This caps Gmail API + Claude API cost per user — important now that others can try the product with their own Gmail
+
 ---
 
 ## Database Schema
 
 ```prisma
 model User {
-  id         String        @id          // device UUID (anonymous)
-  email      String?       @unique      // Gmail address, populated after OAuth
-  createdAt  DateTime      @default(now())
-  oauthToken OAuthToken?
-  ledger     LedgerEntry[]
+  id           String        @id          // device UUID (anonymous)
+  email        String?       @unique      // Gmail address, populated after OAuth
+  createdAt    DateTime      @default(now())
+  lastSyncedAt DateTime?                  // last successful /emails/sync — drives rate limiting
+  oauthToken   OAuthToken?
+  ledger       LedgerEntry[]
 }
 
 model OAuthToken {
@@ -130,9 +158,9 @@ model LedgerEntry {
 | Method | Path | Description |
 |---|---|---|
 | POST | `/users` | Upsert user by device UUID, returns `{id, email, connected}` |
-| GET | `/auth/google?userId=` | Start OAuth — redirects to Google |
-| GET | `/auth/google/callback` | OAuth callback — stores tokens, shows success page |
-| POST | `/emails/sync` | `{userId}` → fetch+extract new emails, returns `{synced, total}` |
+| GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
+| GET | `/auth/google/callback` | OAuth callback — stores tokens, then redirects to `<redirect>/?connected=1` (web) or shows a "close tab" page (mobile) |
+| POST | `/emails/sync` | `{userId}` → fetch+extract new emails, returns `{synced, total}`. Rate-limited per user (429 if synced within `SYNC_RATE_LIMIT_HOURS`) |
 | GET | `/wrapped/:userId` | Returns full Wrapped stats object |
 | GET | `/health` | `{ok: true}` |
 | GET | `/privacy` | HTML privacy policy page |
@@ -148,11 +176,19 @@ GOOGLE_CLIENT_ID=...                 # Google Cloud Console OAuth 2.0 client
 GOOGLE_CLIENT_SECRET=...
 ANTHROPIC_API_KEY=sk-ant-...
 BASE_URL=https://your-render-url     # Used to build the OAuth callback URL
+FRONTEND_URL=https://your-vercel-url # Web app origin — callback redirects here after connect
+SYNC_RATE_LIMIT_HOURS=24             # Optional, per-user min hours between /emails/sync (default 24, 0 disables)
 PORT=3000                            # Optional, defaults to 3000
 ```
 
-### App (`app/app.json` → `extra.apiUrl`)
+### Web (`web/.env.local`, and Vercel project env)
+```
+NEXT_PUBLIC_API_URL=https://do-i-want-to-know.onrender.com   # Render backend URL
+```
+
+### App (`app/app.json` → `extra.apiUrl`) — legacy Expo mobile client
 Change `"apiUrl": "http://localhost:3000"` to your Render URL after deploying.
+The **web app (`web/`) is now the primary client**; the Expo app is kept but optional.
 
 ---
 
