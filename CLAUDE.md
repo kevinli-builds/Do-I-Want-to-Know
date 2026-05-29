@@ -196,12 +196,28 @@ npm start
 - Render deployment config (`render.yaml`)
 - Switched extraction model from `claude-opus-4-5` → `claude-haiku-4-5` (~20× cheaper, sufficient for the task)
 
-### 🔜 Next session — Deployment (in order)
-1. **Google Cloud Console** — create a project, enable Gmail API, create OAuth 2.0 credentials, add the Render callback URL
-2. **Neon.tech** — create a free PostgreSQL project, copy the connection string
-3. **Render.com** — create a new web service pointing at this repo, set all 5 env vars (`DATABASE_URL`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`, `BASE_URL`)
-4. **App** — update `app/app.json` `extra.apiUrl` to the live Render URL
-5. **Test** — full OAuth + sync + Wrapped flow on a real device
+### ✅ Deployed! (May 29, 2026)
+
+**Live URL: `https://do-i-want-to-know.onrender.com`**
+
+- ✅ Google Cloud Console — Gmail API enabled, OAuth consent screen configured (External, test user: snowwarrior1@gmail.com), OAuth 2.0 Web Application client created
+  - GOOGLE_CLIENT_ID: `341789352511-39o1dfeb97j6cog9q0m860oonqu6avld.apps.googleusercontent.com`
+- ✅ Neon.tech — project "do-i-want-to-know" created, both migrations applied on first deploy
+- ✅ Render.com — service "Do-I-Want-to-Know" live (Free tier, Node, root: `backend/`)
+  - All 5 env vars set: DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY, BASE_URL
+- ✅ App — `app/app.json` `extra.apiUrl` updated to `https://do-i-want-to-know.onrender.com`
+
+### ⚠️ One manual step remaining
+Add the Render redirect URI to Google OAuth credentials:
+1. Go to https://console.cloud.google.com/auth/clients?project=do-i-want-to-know
+2. Click the "Do I Want To Know" client
+3. Under "Authorized redirect URIs", click "+ Add URI"
+4. Add: `https://do-i-want-to-know.onrender.com/auth/google/callback`
+5. Save
+
+### 🔜 Next steps
+- Complete the manual OAuth redirect URI step above
+- Test full OAuth + sync + Wrapped flow on a real device via Expo Go
 
 ### 📝 Decisions made
 - **Hosting: Render, not Vercel** — Vercel serverless functions time out at 10s (free) / 60s (Pro), which is too short for `/emails/sync` (fetches 200 emails + 8 batched Claude calls = 30–120s). Render runs a persistent Express server with no timeout limit. Downside: ~30s cold start after inactivity, acceptable for a personal tool.
