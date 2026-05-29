@@ -203,6 +203,10 @@ npm start
 4. **App** — update `app/app.json` `extra.apiUrl` to the live Render URL
 5. **Test** — full OAuth + sync + Wrapped flow on a real device
 
+### 📝 Decisions made
+- **Hosting: Render, not Vercel** — Vercel serverless functions time out at 10s (free) / 60s (Pro), which is too short for `/emails/sync` (fetches 200 emails + 8 batched Claude calls = 30–120s). Render runs a persistent Express server with no timeout limit. Downside: ~30s cold start after inactivity, acceptable for a personal tool.
+- **Model: `claude-haiku-4-5`** — switched from `claude-opus-4-5`; ~20× cheaper and sufficient for structured JSON extraction from email metadata.
+
 ### 💡 Future ideas (post-launch)
 - Add a "Disconnect Gmail" button
 - Improve Wrapped UI with charts / animations
