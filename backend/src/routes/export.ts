@@ -46,6 +46,7 @@ router.get('/:userId', async (req, res) => {
     where: { userId },
     orderBy: { date: 'desc' },
   })
+  const stats = entries.length > 0 ? computeStats(entries) : null
 
   const wb = new ExcelJS.Workbook()
   wb.creator  = 'Do I Want To Know'
@@ -100,15 +101,60 @@ router.get('/:userId', async (req, res) => {
     to:   { row: 1, column: txSheet.columns.length },
   }
 
-  // ── Sheet 2: Marketing Email ──────────────────────────────────────────────
+  // ── Sheet: Subscriptions ──────────────────────────────────────────────────
+  const subSheet = wb.addWorksheet('Subscriptions', {
+    views: [{ state: 'frozen', ySplit: 1 }],
+  })
+  subSheet.columns = [
+    { header: 'Subscription', key: 'vendor',   width: 26 },
+    { header: 'Cadence',      key: 'cadence',  width: 12 },
+    { header: 'Est. Monthly', key: 'monthly',  width: 14 },
+    { header: 'Last Amount',  key: 'last',     width: 14 },
+    { header: 'Last Charge',  key: 'lastDate', width: 14 },
+    { header: 'Charges Seen', key: 'count',    width: 13 },
+    { header: 'Status',       key: 'status',   width: 12 },
+  ]
+  subSheet.getRow(1).eachCell(cell => Object.assign(cell, headerStyle()))
+  subSheet.getRow(1).height = 22
+
+  const insights = stats?.subscriptionInsights ?? []
+  insights.forEach((s, i) => {
+    const row = subSheet.addRow({
+      vendor:   s.vendor,
+      cadence:  s.cadence,
+      monthly:  s.monthlyEstimate || '',
+      last:     s.lastAmount ?? '',
+      lastDate: s.lastCharge,
+      count:    s.chargeCount,
+      status:   s.active ? 'Active' : 'Inactive',
+    })
+    const alt = altRow(i % 2 === 1)
+    row.eachCell(cell => { if (alt.fill) cell.fill = alt.fill })
+    if (s.monthlyEstimate) row.getCell('monthly').numFmt = '#,##0.00'
+    if (s.lastAmount != null) row.getCell('last').numFmt = '#,##0.00'
+  })
+  if (stats && insights.length > 0) {
+    const totalRow = subSheet.addRow({ vendor: 'TOTAL (active)', monthly: stats.monthlySubscriptionCost })
+    totalRow.getCell('vendor').font  = { bold: true }
+    totalRow.getCell('monthly').numFmt = '#,##0.00'
+    totalRow.getCell('monthly').font = { bold: true, color: { argb: PURPLE } }
+  }
+  subSheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to:   { row: 1, column: subSheet.columns.length },
+  }
+
+  // ── Sheet: Marketing Email ────────────────────────────────────────────────
   const mktSheet = wb.addWorksheet('Marketing Email', {
     views: [{ state: 'frozen', ySplit: 1 }],
   })
 
   mktSheet.columns = [
-    { header: 'Date',        key: 'date',        width: 14 },
-    { header: 'Sender',      key: 'vendor',      width: 28 },
-    { header: 'Subject',     key: 'description', width: 52 },
+    { header: 'Date',         key: 'date',        width: 14 },
+    { header: 'Sender',       key: 'vendor',      width: 24 },
+    { header: 'Sender Email', key: 'senderEmail', width: 30 },
+    { header: 'Subject',      key: 'description', width: 44 },
+    { header: 'Unsubscribe',  key: 'unsubscribe', width: 16 },
   ]
 
   mktSheet.getRow(1).eachCell(cell => Object.assign(cell, headerStyle('FF5249E0')))
@@ -119,13 +165,21 @@ router.get('/:userId', async (req, res) => {
     const row = mktSheet.addRow({
       date:        e.date,
       vendor:      e.vendor,
+      senderEmail: e.senderEmail ?? '',
       description: e.description,
+      unsubscribe: e.unsubscribe ?? '',
     })
     const alt = altRow(i % 2 === 1)
     row.eachCell(cell => {
       if (alt.fill) cell.fill = alt.fill
     })
     row.getCell('date').numFmt = 'yyyy-mm-dd'
+    // Render an https unsubscribe link as a clickable "Unsubscribe" hyperlink
+    if (e.unsubscribe && /^https?:/i.test(e.unsubscribe)) {
+      const cell = row.getCell('unsubscribe')
+      cell.value = { text: 'Unsubscribe', hyperlink: e.unsubscribe }
+      cell.font = { color: { argb: 'FF5249E0' }, underline: true }
+    }
   })
 
   mktSheet.autoFilter = {
@@ -165,11 +219,11 @@ router.get('/:userId', async (req, res) => {
     }
   }
 
-  if (entries.length > 0) {
-    const stats = computeStats(entries)
-
+  if (stats) {
     addSection('📊 Overview')
     addKV('Total Purchase Spend',      stats.totalSpend, false)
+    addKV('Monthly Subscriptions',     stats.monthlySubscriptionCost, true)
+    addKV('Annual Subscriptions',      stats.annualSubscriptionCost, false)
     addKV('Total Donations',           stats.charityTotal, true)
     addKV('Total Tracked Emails',      entries.length, false)
     addKV('Subscriptions',             stats.subscriptionCount, true)
