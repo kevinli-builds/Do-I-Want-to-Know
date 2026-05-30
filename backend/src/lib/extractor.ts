@@ -1,17 +1,10 @@
 import Anthropic from '@anthropic-ai/sdk'
+import type { Category } from './categories'
 
 const anthropic = new Anthropic()
 
 export interface ExtractedEntry {
-  category:
-    | 'order'
-    | 'subscription'
-    | 'travel'
-    | 'food'
-    | 'entertainment'
-    | 'charity'
-    | 'marketing'
-    | 'other'
+  category: Category
   vendor: string
   amount?: number
   currency: string

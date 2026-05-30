@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { syncEmails, type WrappedData } from '../lib/api'
+import { syncEmails, downloadExcel, type WrappedData } from '../lib/api'
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -69,9 +69,16 @@ export function WrappedView({
           <h1>Your Wrapped</h1>
           {data.email && <div className="email">{data.email}</div>}
         </div>
-        <button className="btn" onClick={handleSync} disabled={syncing}>
-          {syncing ? 'Syncing…' : 'Sync Emails'}
-        </button>
+        <div style={{ display: 'flex', gap: 10 }}>
+          {data.totalEntries > 0 && (
+            <button className="btn btn-outline" onClick={() => downloadExcel(userId)}>
+              ⬇ Export
+            </button>
+          )}
+          <button className="btn" onClick={handleSync} disabled={syncing}>
+            {syncing ? 'Syncing…' : 'Sync Emails'}
+          </button>
+        </div>
       </div>
 
       {notice && <div className={`notice${notice.error ? ' error' : ''}`}>{notice.text}</div>}

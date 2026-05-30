@@ -59,6 +59,17 @@ export async function getWrapped(userId: string): Promise<WrappedData> {
   return res.json()
 }
 
+/** Triggers a direct file download of the user's data as an Excel workbook. */
+export function downloadExcel(userId: string): void {
+  const a = document.createElement('a')
+  a.href = `${API}/export/${encodeURIComponent(userId)}`
+  a.download = ''          // let the server Content-Disposition set the filename
+  a.style.display = 'none'
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+}
+
 export async function syncEmails(userId: string): Promise<SyncResult> {
   const res = await fetch(`${API}/emails/sync`, {
     method: 'POST',
