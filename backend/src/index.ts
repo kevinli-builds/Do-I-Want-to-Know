@@ -10,6 +10,16 @@ import { accessRouter } from './routes/access'
 import { monitorRouter } from './routes/monitor'
 import { transactionsRouter } from './routes/transactions'
 
+// Safety net: never let a stray async error terminate the whole server (Node
+// crashes the process on unhandled rejections by default, which on Render means
+// a restart that takes every in-flight request down). Log and stay up instead.
+process.on('unhandledRejection', reason => {
+  console.error('[unhandledRejection]', reason)
+})
+process.on('uncaughtException', err => {
+  console.error('[uncaughtException]', err)
+})
+
 const app = express()
 app.use(cors())
 app.use(express.json())
