@@ -117,6 +117,7 @@ export interface Transaction {
   description: string
   emailId: string
   senderEmail: string | null
+  unsubscribe: string | null
 }
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {

@@ -37,11 +37,6 @@ function relativeTime(ts: number): string {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
-// Deep link into Gmail filtered to a sender, so the user can bulk-manage.
-function gmailSearchUrl(email: string): string {
-  return `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(`from:(${email})`)}`
-}
-
 function shortDate(iso: string): string {
   const d = new Date(iso)
   if (isNaN(d.getTime())) return ''
@@ -56,6 +51,7 @@ export function WrappedView({
   onSelectYear,
   yearLoading = false,
   onRefresh,
+  onOpenUnsubscribe,
 }: {
   userId: string
   data: WrappedData
@@ -64,6 +60,7 @@ export function WrappedView({
   onSelectYear: (year: number | null) => void
   yearLoading?: boolean
   onRefresh: () => Promise<void>
+  onOpenUnsubscribe?: () => void
 }) {
   const [syncing, setSyncing] = useState(false)
   const [notice, setNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
@@ -247,50 +244,29 @@ export function WrappedView({
             </div>
           )}
 
-          {/* ── Who Spams You Most + Unsubscribe ───────────────────── */}
+          {/* ── Who Spams You Most (manage in Unsubscribe tab) ─────── */}
           {stats.topSpammers.length > 0 && (
             <div className="card">
               <h2>📬 Who Emails You Most</h2>
               <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 14 }}>
-                Top promotional senders — unsubscribe or jump to them in Gmail
+                Your top promotional senders
               </p>
-              {stats.topSpammers.map((s, i) => (
-                <div className="spammer" key={s.vendor}>
-                  <div className="row" style={{ borderBottom: 'none', padding: '2px 0' }}>
-                    <span className="label">
-                      <span className="rank">{i + 1}</span>
-                      {s.vendor}
-                    </span>
-                    <span className="value">
-                      {s.count} email{s.count === 1 ? '' : 's'}
-                    </span>
-                  </div>
-                  {(s.unsubscribe || s.senderEmail) && (
-                    <div className="spammer-actions">
-                      {s.unsubscribe && (
-                        <a
-                          className="link-btn"
-                          href={s.unsubscribe}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Unsubscribe
-                        </a>
-                      )}
-                      {s.senderEmail && (
-                        <a
-                          className="link-btn ghost"
-                          href={gmailSearchUrl(s.senderEmail)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                        >
-                          Find in Gmail
-                        </a>
-                      )}
-                    </div>
-                  )}
+              {stats.topSpammers.slice(0, 5).map((s, i) => (
+                <div className="row" key={s.vendor}>
+                  <span className="label">
+                    <span className="rank">{i + 1}</span>
+                    {s.vendor}
+                  </span>
+                  <span className="value">
+                    {s.count} email{s.count === 1 ? '' : 's'}
+                  </span>
                 </div>
               ))}
+              {onOpenUnsubscribe && (
+                <button className="btn btn-outline" style={{ marginTop: 14 }} onClick={onOpenUnsubscribe}>
+                  Manage &amp; unsubscribe →
+                </button>
+              )}
             </div>
           )}
 

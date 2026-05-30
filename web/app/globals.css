@@ -436,6 +436,7 @@ body {
 /* ── View tabs (Wrapped / Monitor) ──────────────────────────── */
 .view-tabs {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 6px;
   padding: 16px 20px 0;
@@ -611,6 +612,61 @@ body {
   white-space: nowrap;
 }
 .txn-link:hover { text-decoration: underline; }
+
+/* ── Unsubscribe / sender manager ───────────────────────────── */
+.sender {
+  border-bottom: 1px solid var(--border);
+  padding: 14px 0;
+}
+.sender:last-child { border-bottom: none; }
+.sender.done { opacity: 0.55; }
+.sender.done .sender-name { text-decoration: line-through; }
+.sender-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sender-name { font-weight: 700; }
+.sender-email {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 2px;
+  word-break: break-all;
+}
+.sender-count {
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.sender-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.done-btn {
+  cursor: pointer;
+  background: transparent !important;
+  color: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+}
+.sender.done .done-btn {
+  color: #1a7f4b !important;
+  border-color: #c7ebd6 !important;
+}
+.unsub-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--muted);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
 
 /* ── Print / Save as PDF ────────────────────────────────────── */
 @media print {

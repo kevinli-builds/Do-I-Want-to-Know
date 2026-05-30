@@ -8,6 +8,7 @@ import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
 import { MonitorView } from './components/MonitorView'
 import { TransactionsView } from './components/TransactionsView'
+import { UnsubscribeView } from './components/UnsubscribeView'
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -17,7 +18,7 @@ export default function Home() {
   const [loading,   setLoading]   = useState(true)
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [yearLoading,  setYearLoading]  = useState(false)
-  const [view, setView] = useState<'wrapped' | 'monitor' | 'audit'>('wrapped')
+  const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'unsubscribe'>('wrapped')
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
@@ -151,6 +152,12 @@ export default function Home() {
           >
             Audit
           </button>
+          <button
+            className={`view-tab${view === 'unsubscribe' ? ' active' : ''}`}
+            onClick={() => setView('unsubscribe')}
+          >
+            Unsubscribe
+          </button>
         </nav>
         {view === 'wrapped' ? (
           <WrappedView
@@ -161,11 +168,14 @@ export default function Home() {
             onSelectYear={handleSelectYear}
             yearLoading={yearLoading}
             onRefresh={() => loadWrapped(userId, selectedYear)}
+            onOpenUnsubscribe={() => setView('unsubscribe')}
           />
         ) : view === 'monitor' ? (
           <MonitorView userId={userId} />
-        ) : (
+        ) : view === 'audit' ? (
           <TransactionsView userId={userId} />
+        ) : (
+          <UnsubscribeView userId={userId} />
         )}
       </>
     )
