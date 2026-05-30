@@ -10,6 +10,7 @@ export interface ExtractedEntry {
   currency: string
   date: string       // ISO date string e.g. "2025-11-03"
   description: string
+  termMonths?: number // months covered by an upfront charge (6-month plan → 6, annual → 12)
 }
 
 type BatchResult = Record<string, ExtractedEntry | null>
@@ -46,7 +47,8 @@ Respond ONLY with a JSON object mapping the email index (as a string) to either 
   "amount": <number or omit if unknown/not a financial transaction>,
   "currency": "<ISO code, default USD>",
   "date": "<YYYY-MM-DD>",
-  "description": "<one short line, e.g. 'Nike summer sale promo' or 'Donation to Red Cross'>"
+  "description": "<one short line, e.g. 'Nike summer sale promo' or 'Donation to Red Cross'>",
+  "termMonths": <number, ONLY if the charge explicitly covers a multi-month term paid upfront>
 }
 
 Category guide:
@@ -63,7 +65,11 @@ Key rules:
 - "marketing" is for bulk/promotional email from businesses (newsletters, flash sales, "we miss you", coupon codes, etc.)
 - Real purchase receipts or order confirmations are NEVER marketing — classify them by type (order, food, etc.)
 - Charity thank-you / receipt emails ARE charity, not marketing
-- If unsure between marketing and null, pick marketing for any brand promotional email`,
+- If unsure between marketing and null, pick marketing for any brand promotional email
+
+termMonths rule:
+- Set termMonths ONLY when a single charge clearly covers a fixed multi-month term paid upfront, e.g. "6-month plan" → 6, "annual"/"1-year"/"yearly" → 12, "quarterly"/"3 months" → 3, "biannual"/"2 years" → 24.
+- This lets us show the monthly-equivalent cost. OMIT termMonths for ordinary one-off purchases and normal monthly charges.`,
       messages: [{ role: 'user', content: prompt }],
     })
 

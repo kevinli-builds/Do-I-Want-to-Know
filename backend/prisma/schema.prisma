@@ -39,6 +39,7 @@ model LedgerEntry {
   emailId     String   // Gmail message ID — used for deduplication
   senderEmail String?  // parsed From address (for the unsubscribe helper)
   unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
+  termMonths  Int?     // if the charge covers a multi-month term (e.g. 6 = 6-month plan)
   createdAt   DateTime @default(now())
 
   @@unique([userId, emailId])

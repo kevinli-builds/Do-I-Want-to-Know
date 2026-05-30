@@ -85,6 +85,24 @@ export function UnsubscribeView({ userId }: { userId: string }) {
     })
   }
 
+  // Bulk actions operate on the currently-filtered (visible) senders.
+  function markAll(vendors: string[]) {
+    setDone(prev => {
+      const next = new Set(prev)
+      for (const v of vendors) next.add(v)
+      persistDone(userId, next)
+      return next
+    })
+  }
+  function clearAll(vendors: string[]) {
+    setDone(prev => {
+      const next = new Set(prev)
+      for (const v of vendors) next.delete(v)
+      persistDone(userId, next)
+      return next
+    })
+  }
+
   if (error) {
     return (
       <div className="shell">
@@ -144,6 +162,20 @@ export function UnsubscribeView({ userId }: { userId: string }) {
               Hide handled
             </label>
           </div>
+
+          {filtered.length > 0 && (
+            <div className="bulk-bar">
+              <span>{filtered.length} shown</span>
+              <div className="bulk-btns">
+                <button className="link-btn ghost" onClick={() => markAll(filtered.map(s => s.vendor))}>
+                  ✓ Mark all handled
+                </button>
+                <button className="link-btn ghost" onClick={() => clearAll(filtered.map(s => s.vendor))}>
+                  Clear handled
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="card" style={{ padding: '6px 18px' }}>
             {filtered.length === 0 ? (

@@ -612,6 +612,37 @@ body {
   white-space: nowrap;
 }
 .txn-link:hover { text-decoration: underline; }
+.txn-term {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--purple-dark);
+  background: #efeefe;
+  border-radius: 8px;
+  padding: 3px 9px;
+  margin-bottom: 6px;
+}
+
+/* ── Bulk actions bar (Unsubscribe) ─────────────────────────── */
+.bulk-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.bulk-btns {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.bulk-btns .link-btn {
+  cursor: pointer;
+  border: 1px solid var(--border) !important;
+}
 
 /* ── Unsubscribe / sender manager ───────────────────────────── */
 .sender {

@@ -118,6 +118,11 @@ export function TransactionsView({ userId }: { userId: string }) {
                     <span className="txn-amount">{t.amount != null ? money(t.amount) : '—'}</span>
                   </div>
                   <div className="txn-desc">{t.description}</div>
+                  {t.termMonths && t.termMonths > 1 && t.amount != null && (
+                    <div className="txn-term">
+                      🗓 Covers {t.termMonths} months · ≈ {money(t.amount / t.termMonths)}/mo
+                    </div>
+                  )}
                   <div className="txn-meta">
                     <span>{fmtDate(t.date)} · {t.category}</span>
                     <a

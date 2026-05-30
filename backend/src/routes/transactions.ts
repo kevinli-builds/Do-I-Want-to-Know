@@ -29,6 +29,7 @@ router.get('/:userId', async (req, res) => {
       emailId: e.emailId,
       senderEmail: e.senderEmail,
       unsubscribe: e.unsubscribe,
+      termMonths: e.termMonths,
     })),
   })
 })

@@ -45,6 +45,7 @@ export interface MostExpensive {
   description: string
   date: Date
   emailId: string
+  termMonths: number | null
 }
 
 export interface WrappedStats {
@@ -122,7 +123,10 @@ function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
   const insights: SubscriptionInsight[] = Object.entries(byVendor).map(([vendor, list]) => {
     const sorted = [...list].sort((a, b) => a.date.getTime() - b.date.getTime())
     const withAmount = sorted.filter(e => e.amount != null && e.amount > 0)
-    const lastAmount = withAmount.length ? withAmount[withAmount.length - 1].amount! : null
+    const lastWithAmount = withAmount.length ? withAmount[withAmount.length - 1] : null
+    const lastAmount = lastWithAmount?.amount ?? null
+    // If the charge explicitly covers a multi-month term, amortize directly.
+    const lastTerm = lastWithAmount?.termMonths ?? null
 
     // Median gap between consecutive charges (days)
     let medianGap = 30.44 // assume monthly when we only have one sighting
@@ -136,11 +140,18 @@ function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
     }
 
     let cadence: SubscriptionInsight['cadence']
-    if (medianGap <= 10) cadence = 'weekly'
+    if (lastTerm && lastTerm >= 12) cadence = 'annual'
+    else if (medianGap <= 10) cadence = 'weekly'
     else if (medianGap > 250) cadence = 'annual'
     else cadence = 'monthly'
 
-    const monthlyEstimate = lastAmount != null ? round2(lastAmount * (30.44 / medianGap)) : 0
+    // Prefer an explicit term (e.g. 6-month plan) over the gap-based estimate.
+    const monthlyEstimate =
+      lastAmount == null
+        ? 0
+        : lastTerm && lastTerm > 1
+          ? round2(lastAmount / lastTerm)
+          : round2(lastAmount * (30.44 / medianGap))
 
     const lastCharge = sorted[sorted.length - 1].date
     const ageDays = (Date.now() - lastCharge.getTime()) / 86_400_000
@@ -231,7 +242,7 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
     byCategory,
     topVendors,
     mostExpensive: mostExpensive
-      ? { vendor: mostExpensive.vendor, amount: mostExpensive.amount, description: mostExpensive.description, date: mostExpensive.date, emailId: mostExpensive.emailId }
+      ? { vendor: mostExpensive.vendor, amount: mostExpensive.amount, description: mostExpensive.description, date: mostExpensive.date, emailId: mostExpensive.emailId, termMonths: mostExpensive.termMonths }
       : null,
     monthlySpend,
     subscriptions,

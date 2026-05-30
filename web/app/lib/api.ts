@@ -30,7 +30,7 @@ export interface WrappedStats {
   totalSpend: number
   byCategory: Record<string, { count: number; spend: number }>
   topVendors: { vendor: string; count: number }[]
-  mostExpensive: { vendor: string; amount: number; description: string; date: string; emailId: string } | null
+  mostExpensive: { vendor: string; amount: number; description: string; date: string; emailId: string; termMonths: number | null } | null
   monthlySpend: Record<string, number>
   subscriptions: string[]
   subscriptionCount: number
@@ -118,6 +118,7 @@ export interface Transaction {
   emailId: string
   senderEmail: string | null
   unsubscribe: string | null
+  termMonths: number | null
 }
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {

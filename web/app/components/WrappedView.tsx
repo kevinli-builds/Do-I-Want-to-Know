@@ -212,6 +212,11 @@ export function WrappedView({
               <div className="email" style={{ marginTop: 6 }}>
                 {stats.mostExpensive.description}
               </div>
+              {stats.mostExpensive.termMonths && stats.mostExpensive.termMonths > 1 && stats.mostExpensive.amount != null && (
+                <div className="txn-term" style={{ marginTop: 6 }}>
+                  🗓 Covers {stats.mostExpensive.termMonths} months · ≈ {money(stats.mostExpensive.amount / stats.mostExpensive.termMonths)}/mo
+                </div>
+              )}
               {stats.mostExpensive.emailId && (
                 <a
                   className="txn-link"
