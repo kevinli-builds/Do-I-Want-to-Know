@@ -1,0 +1,203 @@
+// Period-over-period monitoring analytics — powers the Monitor deck.
+// Pure functions over LedgerEntry[]; no I/O, no Claude.
+
+import type { LedgerEntry } from '@prisma/client'
+import { SPEND_CATEGORIES, type Category } from './categories'
+import { computeStats } from './stats'
+
+export type Period = 'month' | 'year'
+
+export interface KpiPair {
+  value: number
+  prev: number
+  deltaPct: number | null // null when prev is 0 (can't compute %)
+}
+
+export interface TrendPoint {
+  label: string
+  value: number
+}
+
+export interface MonitorFlag {
+  kind: 'up' | 'down' | 'new' | 'info'
+  text: string
+}
+
+export interface MonitorData {
+  period: Period
+  currentLabel: string
+  previousLabel: string
+  kpis: {
+    spend: KpiPair
+    transactions: KpiPair
+    subscriptionSpend: KpiPair
+    promoEmails: KpiPair
+    donations: KpiPair
+  }
+  spendTrend: TrendPoint[]
+  promoTrend: TrendPoint[]
+  subscriptions: {
+    monthlyBurn: number
+    activeCount: number
+    newlyDetected: { vendor: string; monthlyEstimate: number }[]
+    priceChanges: { vendor: string; from: number; to: number }[]
+  }
+  topSenders: { vendor: string; count: number; prevCount: number }[]
+  flags: MonitorFlag[]
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+const round1 = (n: number) => Math.round(n * 10) / 10
+const monthKey = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+const isSpend = (e: LedgerEntry) => SPEND_CATEGORIES.includes(e.category as Category)
+
+function deltaPct(cur: number, prev: number): number | null {
+  if (prev === 0) return null
+  return round1(((cur - prev) / prev) * 100)
+}
+
+function periodBase(period: Period, now: Date, which: 'cur' | 'prev'): Date {
+  if (period === 'year') return new Date(now.getFullYear() - (which === 'cur' ? 0 : 1), 0, 1)
+  return new Date(now.getFullYear(), now.getMonth() - (which === 'cur' ? 0 : 1), 1)
+}
+
+function inPeriod(d: Date, period: Period, base: Date): boolean {
+  if (period === 'year') return d.getFullYear() === base.getFullYear()
+  return d.getFullYear() === base.getFullYear() && d.getMonth() === base.getMonth()
+}
+
+function periodLabel(period: Period, base: Date): string {
+  return period === 'year'
+    ? String(base.getFullYear())
+    : base.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+}
+
+function kpiTotals(entries: LedgerEntry[]) {
+  const spend = round2(entries.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0))
+  const transactions = entries.filter(isSpend).length
+  const subscriptionSpend = round2(
+    entries.filter(e => e.category === 'subscription').reduce((s, e) => s + (e.amount ?? 0), 0)
+  )
+  const promoEmails = entries.filter(e => e.category === 'marketing').length
+  const donations = round2(
+    entries.filter(e => e.category === 'charity').reduce((s, e) => s + (e.amount ?? 0), 0)
+  )
+  return { spend, transactions, subscriptionSpend, promoEmails, donations }
+}
+
+const pair = (cur: number, prev: number): KpiPair => ({ value: cur, prev, deltaPct: deltaPct(cur, prev) })
+
+export function computeMonitor(entries: LedgerEntry[], period: Period, now = new Date()): MonitorData {
+  const curBase = periodBase(period, now, 'cur')
+  const prevBase = periodBase(period, now, 'prev')
+  const curEntries = entries.filter(e => inPeriod(e.date, period, curBase))
+  const prevEntries = entries.filter(e => inPeriod(e.date, period, prevBase))
+
+  const cur = kpiTotals(curEntries)
+  const prev = kpiTotals(prevEntries)
+
+  // ── Trends: last 12 months ────────────────────────────────────────────────
+  const months: Date[] = []
+  for (let i = 11; i >= 0; i--) months.push(new Date(now.getFullYear(), now.getMonth() - i, 1))
+  const spendByMonth: Record<string, number> = {}
+  const promoByMonth: Record<string, number> = {}
+  for (const e of entries) {
+    const k = monthKey(e.date)
+    if (isSpend(e)) spendByMonth[k] = (spendByMonth[k] ?? 0) + (e.amount ?? 0)
+    if (e.category === 'marketing') promoByMonth[k] = (promoByMonth[k] ?? 0) + 1
+  }
+  const trend = (src: Record<string, number>): TrendPoint[] =>
+    months.map(d => ({
+      label: d.toLocaleString('en-US', { month: 'short' }),
+      value: round2(src[monthKey(d)] ?? 0),
+    }))
+
+  // ── Subscription monitor ──────────────────────────────────────────────────
+  const stats = computeStats(entries)
+  const activeInsights = stats.subscriptionInsights.filter(s => s.active)
+
+  // Group subscription charges by vendor (ascending date) for new/price detection
+  const subByVendor: Record<string, LedgerEntry[]> = {}
+  for (const e of entries) {
+    if (e.category === 'subscription') (subByVendor[e.vendor] ??= []).push(e)
+  }
+  const newlyDetected: { vendor: string; monthlyEstimate: number }[] = []
+  const priceChanges: { vendor: string; from: number; to: number }[] = []
+  for (const [vendor, list] of Object.entries(subByVendor)) {
+    const sorted = [...list].sort((a, b) => a.date.getTime() - b.date.getTime())
+    // New this period: the very first charge we've seen lands in the current period
+    if (inPeriod(sorted[0].date, period, curBase)) {
+      const est = stats.subscriptionInsights.find(s => s.vendor === vendor)?.monthlyEstimate ?? 0
+      newlyDetected.push({ vendor, monthlyEstimate: est })
+    }
+    // Price change: last two distinct known amounts differ
+    const amts = sorted.filter(e => e.amount != null && e.amount > 0).map(e => e.amount as number)
+    if (amts.length >= 2) {
+      const to = amts[amts.length - 1]
+      const from = amts[amts.length - 2]
+      if (Math.abs(to - from) >= 0.01) priceChanges.push({ vendor, from: round2(from), to: round2(to) })
+    }
+  }
+
+  // ── Inbox-load monitor: top senders this period (+ prior count) ────────────
+  const curMarketing = curEntries.filter(e => e.category === 'marketing')
+  const prevMarketing = prevEntries.filter(e => e.category === 'marketing')
+  const curCounts: Record<string, number> = {}
+  const prevCounts: Record<string, number> = {}
+  for (const e of curMarketing) curCounts[e.vendor] = (curCounts[e.vendor] ?? 0) + 1
+  for (const e of prevMarketing) prevCounts[e.vendor] = (prevCounts[e.vendor] ?? 0) + 1
+  const topSenders = Object.entries(curCounts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 8)
+    .map(([vendor, count]) => ({ vendor, count, prevCount: prevCounts[vendor] ?? 0 }))
+
+  // ── Auto-flagged changes ──────────────────────────────────────────────────
+  const flags: MonitorFlag[] = []
+  const spendDelta = deltaPct(cur.spend, prev.spend)
+  if (spendDelta != null && Math.abs(spendDelta) >= 25) {
+    flags.push({
+      kind: spendDelta > 0 ? 'up' : 'down',
+      text: `Spend ${spendDelta > 0 ? 'up' : 'down'} ${Math.abs(spendDelta)}% vs ${periodLabel(period, prevBase)}`,
+    })
+  }
+  const promoDelta = deltaPct(cur.promoEmails, prev.promoEmails)
+  if (promoDelta != null && Math.abs(promoDelta) >= 25) {
+    flags.push({
+      kind: promoDelta > 0 ? 'up' : 'down',
+      text: `Promotional email ${promoDelta > 0 ? 'up' : 'down'} ${Math.abs(promoDelta)}%`,
+    })
+  }
+  for (const n of newlyDetected) {
+    flags.push({
+      kind: 'new',
+      text: `New subscription: ${n.vendor}${n.monthlyEstimate > 0 ? ` (~$${n.monthlyEstimate}/mo)` : ''}`,
+    })
+  }
+  for (const p of priceChanges) {
+    flags.push({ kind: 'info', text: `Price change: ${p.vendor} $${p.from} → $${p.to}` })
+  }
+  if (flags.length === 0) flags.push({ kind: 'info', text: 'No notable changes this period.' })
+
+  return {
+    period,
+    currentLabel: periodLabel(period, curBase),
+    previousLabel: periodLabel(period, prevBase),
+    kpis: {
+      spend: pair(cur.spend, prev.spend),
+      transactions: pair(cur.transactions, prev.transactions),
+      subscriptionSpend: pair(cur.subscriptionSpend, prev.subscriptionSpend),
+      promoEmails: pair(cur.promoEmails, prev.promoEmails),
+      donations: pair(cur.donations, prev.donations),
+    },
+    spendTrend: trend(spendByMonth),
+    promoTrend: trend(promoByMonth),
+    subscriptions: {
+      monthlyBurn: stats.monthlySubscriptionCost,
+      activeCount: activeInsights.length,
+      newlyDetected,
+      priceChanges,
+    },
+    topSenders,
+    flags,
+  }
+}

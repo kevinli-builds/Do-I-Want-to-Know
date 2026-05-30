@@ -7,6 +7,7 @@ import { emailsRouter } from './routes/emails'
 import { wrappedRouter } from './routes/wrapped'
 import { exportRouter } from './routes/export'
 import { accessRouter } from './routes/access'
+import { monitorRouter } from './routes/monitor'
 
 const app = express()
 app.use(cors())
@@ -18,6 +19,7 @@ app.use('/emails', emailsRouter)
 app.use('/wrapped', wrappedRouter)
 app.use('/export', exportRouter)
 app.use('/access', accessRouter)
+app.use('/monitor', monitorRouter)
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 

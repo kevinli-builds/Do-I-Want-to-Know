@@ -432,3 +432,132 @@ body {
 .link-btn.ghost:hover {
   background: #efeefe;
 }
+
+/* ── View tabs (Wrapped / Monitor) ──────────────────────────── */
+.view-tabs {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 20px 0;
+  max-width: 720px;
+  margin: 0 auto;
+}
+.view-tab {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-size: 15px;
+  font-weight: 700;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.view-tab.active {
+  color: var(--purple);
+  border-bottom-color: var(--purple);
+}
+
+/* ── Monitor: segmented control + actions ───────────────────── */
+.monitor-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.seg-btn {
+  background: var(--card);
+  border: none;
+  padding: 9px 14px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  cursor: pointer;
+}
+.seg-btn.active {
+  background: var(--purple);
+  color: #fff;
+}
+
+/* ── KPI tiles ──────────────────────────────────────────────── */
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  margin-bottom: 16px;
+}
+.kpi {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 16px 18px;
+}
+.kpi-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--muted);
+}
+.kpi-value {
+  font-size: 26px;
+  font-weight: 800;
+  margin: 6px 0 4px;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.kpi-prev {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+/* ── Delta badges ───────────────────────────────────────────── */
+.delta {
+  display: inline-block;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+}
+.delta-up   { background: #fdeef0; color: #c0334a; }
+.delta-down { background: #e7f7ee; color: #1a7f4b; }
+.delta-flat { background: #eee; color: #777; }
+.delta-new  { background: #efeefe; color: var(--purple-dark); }
+
+/* ── Flags ──────────────────────────────────────────────────── */
+.flags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.flag {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 13px;
+  border-radius: 10px;
+  border: 1px solid transparent;
+}
+.flag-up   { background: #fdeef0; color: #c0334a; border-color: #f6d2d8; }
+.flag-down { background: #e7f7ee; color: #1a7f4b; border-color: #c7ebd6; }
+.flag-new  { background: #efeefe; color: var(--purple-dark); border-color: #dddaf9; }
+.flag-info { background: #f4f4f8; color: #555; border-color: var(--border); }
+
+/* ── Print / Save as PDF ────────────────────────────────────── */
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+  .shell { padding-top: 8px; }
+  .card, .kpi { break-inside: avoid; }
+  .chart-fill, .chart-fill.peak { background: #6c63ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .delta, .flag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

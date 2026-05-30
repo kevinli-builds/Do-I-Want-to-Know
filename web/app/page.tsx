@@ -6,6 +6,7 @@ import { upsertUser, getWrapped, type WrappedData } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
+import { MonitorView } from './components/MonitorView'
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -15,6 +16,7 @@ export default function Home() {
   const [loading,   setLoading]   = useState(true)
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [yearLoading,  setYearLoading]  = useState(false)
+  const [view, setView] = useState<'wrapped' | 'monitor'>('wrapped')
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
@@ -128,15 +130,35 @@ export default function Home() {
 
   if (connected && wrapped) {
     return (
-      <WrappedView
-        userId={userId}
-        data={wrapped}
-        cachedAt={cachedAt}
-        selectedYear={selectedYear}
-        onSelectYear={handleSelectYear}
-        yearLoading={yearLoading}
-        onRefresh={() => loadWrapped(userId, selectedYear)}
-      />
+      <>
+        <nav className="view-tabs no-print">
+          <button
+            className={`view-tab${view === 'wrapped' ? ' active' : ''}`}
+            onClick={() => setView('wrapped')}
+          >
+            Wrapped
+          </button>
+          <button
+            className={`view-tab${view === 'monitor' ? ' active' : ''}`}
+            onClick={() => setView('monitor')}
+          >
+            Monitor
+          </button>
+        </nav>
+        {view === 'wrapped' ? (
+          <WrappedView
+            userId={userId}
+            data={wrapped}
+            cachedAt={cachedAt}
+            selectedYear={selectedYear}
+            onSelectYear={handleSelectYear}
+            yearLoading={yearLoading}
+            onRefresh={() => loadWrapped(userId, selectedYear)}
+          />
+        ) : (
+          <MonitorView userId={userId} />
+        )}
+      </>
     )
   }
 

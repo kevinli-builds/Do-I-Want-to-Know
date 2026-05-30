@@ -60,6 +60,52 @@ export interface SyncResult {
 /** Thrown when the Gmail token has expired/been revoked and the user must reconnect. */
 export class ReauthError extends Error {}
 
+// ── Monitor deck ───────────────────────────────────────────────────────────
+export interface KpiPair {
+  value: number
+  prev: number
+  deltaPct: number | null
+}
+export interface TrendPoint {
+  label: string
+  value: number
+}
+export interface MonitorFlag {
+  kind: 'up' | 'down' | 'new' | 'info'
+  text: string
+}
+export interface MonitorData {
+  connected: boolean
+  email: string | null
+  empty: boolean
+  period: 'month' | 'year'
+  currentLabel?: string
+  previousLabel?: string
+  kpis?: {
+    spend: KpiPair
+    transactions: KpiPair
+    subscriptionSpend: KpiPair
+    promoEmails: KpiPair
+    donations: KpiPair
+  }
+  spendTrend?: TrendPoint[]
+  promoTrend?: TrendPoint[]
+  subscriptions?: {
+    monthlyBurn: number
+    activeCount: number
+    newlyDetected: { vendor: string; monthlyEstimate: number }[]
+    priceChanges: { vendor: string; from: number; to: number }[]
+  }
+  topSenders?: { vendor: string; count: number; prevCount: number }[]
+  flags?: MonitorFlag[]
+}
+
+export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
+  const res = await fetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
+  if (!res.ok) throw new Error('Could not load the monitor')
+  return res.json()
+}
+
 export async function upsertUser(id: string): Promise<UserStatus> {
   const res = await fetch(`${API}/users`, {
     method: 'POST',
