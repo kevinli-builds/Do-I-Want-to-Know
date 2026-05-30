@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { fetchEmailsForUser } from '../lib/gmail'
+import { fetchEmailsForUser, isAuthError, type RawEmail } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 
 const router = Router()
@@ -40,8 +40,21 @@ router.post('/sync', async (req, res) => {
     }
   }
 
-  // Fetch all relevant emails from Gmail
-  const allEmails = await fetchEmailsForUser(userId)
+  // Fetch all relevant emails from Gmail. A revoked/expired token (common in
+  // Testing mode, where refresh tokens last 7 days) surfaces as a clear
+  // "reconnect" response rather than a generic failure.
+  let allEmails: RawEmail[]
+  try {
+    allEmails = await fetchEmailsForUser(userId)
+  } catch (err) {
+    if (isAuthError(err)) {
+      return void res.status(401).json({
+        error: 'Your Gmail session expired — tap Connect Gmail to refresh.',
+        reauth: true,
+      })
+    }
+    throw err
+  }
 
   // Skip emails we have already processed
   const existing = await prisma.ledgerEntry.findMany({

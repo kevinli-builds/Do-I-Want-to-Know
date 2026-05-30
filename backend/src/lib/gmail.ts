@@ -9,6 +9,22 @@ export function getOAuthClient() {
   )
 }
 
+// Recognize an expired/revoked OAuth token from a googleapis (Gaxios) error.
+// In Testing mode, Google expires refresh tokens after 7 days, so this is the
+// expected failure that should prompt the user to reconnect Gmail.
+export function isAuthError(err: unknown): boolean {
+  const e = err as { response?: { status?: number; data?: { error?: string } }; code?: number | string; message?: string }
+  const status = e?.response?.status ?? e?.code
+  const code = e?.response?.data?.error
+  const msg = String(e?.message ?? '')
+  return (
+    status === 401 ||
+    code === 'invalid_grant' ||
+    code === 'unauthorized_client' ||
+    /invalid_grant|invalid_token|expired or revoked/i.test(msg)
+  )
+}
+
 export interface RawEmail {
   id: string
   subject: string

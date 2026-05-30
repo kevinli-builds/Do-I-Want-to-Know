@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { syncEmails, downloadExcel, type WrappedData } from '../lib/api'
+import { syncEmails, downloadExcel, startConnect, ReauthError, type WrappedData } from '../lib/api'
 import { SpendChart } from './SpendChart'
 
 const money = (n: number) =>
@@ -66,7 +66,7 @@ export function WrappedView({
   onRefresh: () => Promise<void>
 }) {
   const [syncing, setSyncing] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
+  const [notice, setNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
 
   async function handleSync() {
     setSyncing(true)
@@ -81,7 +81,11 @@ export function WrappedView({
       })
       await onRefresh()
     } catch (e) {
-      setNotice({ text: e instanceof Error ? e.message : 'Sync failed', error: true })
+      if (e instanceof ReauthError) {
+        setNotice({ text: e.message, error: true, reauth: true })
+      } else {
+        setNotice({ text: e instanceof Error ? e.message : 'Sync failed', error: true })
+      }
     } finally {
       setSyncing(false)
     }
@@ -117,7 +121,20 @@ export function WrappedView({
         </div>
       </div>
 
-      {notice && <div className={`notice${notice.error ? ' error' : ''}`}>{notice.text}</div>}
+      {notice && (
+        <div className={`notice${notice.error ? ' error' : ''}`}>
+          {notice.text}
+          {notice.reauth && (
+            <button
+              className="link-btn"
+              style={{ marginLeft: 12, border: 'none', cursor: 'pointer' }}
+              onClick={() => startConnect(userId)}
+            >
+              Connect Gmail
+            </button>
+          )}
+        </div>
+      )}
 
       {(data.availableYears?.length ?? 0) > 1 && (
         <div className="year-toggle">

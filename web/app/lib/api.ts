@@ -57,6 +57,9 @@ export interface SyncResult {
   message?: string
 }
 
+/** Thrown when the Gmail token has expired/been revoked and the user must reconnect. */
+export class ReauthError extends Error {}
+
 export async function upsertUser(id: string): Promise<UserStatus> {
   const res = await fetch(`${API}/users`, {
     method: 'POST',
@@ -101,6 +104,10 @@ export async function syncEmails(userId: string): Promise<SyncResult> {
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
+    // Expired/revoked Gmail token — caller should prompt a reconnect
+    if (res.status === 401 && data.reauth) {
+      throw new ReauthError(data.error ?? 'Your Gmail session expired — please reconnect.')
+    }
     // Surface the backend's friendly message (e.g. rate-limit notice)
     throw new Error(data.error ?? 'Sync failed — please try again')
   }
