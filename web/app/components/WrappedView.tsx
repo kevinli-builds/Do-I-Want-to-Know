@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { syncEmails, downloadExcel, startConnect, ReauthError, type WrappedData } from '../lib/api'
+import { syncEmails, downloadExcel, startConnect, gmailMessageUrl, ReauthError, type WrappedData } from '../lib/api'
 import { SpendChart } from './SpendChart'
 
 const money = (n: number) =>
@@ -215,6 +215,17 @@ export function WrappedView({
               <div className="email" style={{ marginTop: 6 }}>
                 {stats.mostExpensive.description}
               </div>
+              {stats.mostExpensive.emailId && (
+                <a
+                  className="txn-link"
+                  style={{ display: 'inline-block', marginTop: 10 }}
+                  href={gmailMessageUrl(stats.mostExpensive.emailId)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  View email ↗
+                </a>
+              )}
             </div>
           )}
 

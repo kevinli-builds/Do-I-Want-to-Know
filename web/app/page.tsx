@@ -7,6 +7,7 @@ import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cac
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
 import { MonitorView } from './components/MonitorView'
+import { TransactionsView } from './components/TransactionsView'
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -16,7 +17,7 @@ export default function Home() {
   const [loading,   setLoading]   = useState(true)
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [yearLoading,  setYearLoading]  = useState(false)
-  const [view, setView] = useState<'wrapped' | 'monitor'>('wrapped')
+  const [view, setView] = useState<'wrapped' | 'monitor' | 'audit'>('wrapped')
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
@@ -144,6 +145,12 @@ export default function Home() {
           >
             Monitor
           </button>
+          <button
+            className={`view-tab${view === 'audit' ? ' active' : ''}`}
+            onClick={() => setView('audit')}
+          >
+            Audit
+          </button>
         </nav>
         {view === 'wrapped' ? (
           <WrappedView
@@ -155,8 +162,10 @@ export default function Home() {
             yearLoading={yearLoading}
             onRefresh={() => loadWrapped(userId, selectedYear)}
           />
-        ) : (
+        ) : view === 'monitor' ? (
           <MonitorView userId={userId} />
+        ) : (
+          <TransactionsView userId={userId} />
         )}
       </>
     )

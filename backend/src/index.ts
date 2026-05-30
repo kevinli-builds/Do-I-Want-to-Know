@@ -8,6 +8,7 @@ import { wrappedRouter } from './routes/wrapped'
 import { exportRouter } from './routes/export'
 import { accessRouter } from './routes/access'
 import { monitorRouter } from './routes/monitor'
+import { transactionsRouter } from './routes/transactions'
 
 const app = express()
 app.use(cors())
@@ -20,6 +21,7 @@ app.use('/wrapped', wrappedRouter)
 app.use('/export', exportRouter)
 app.use('/access', accessRouter)
 app.use('/monitor', monitorRouter)
+app.use('/transactions', transactionsRouter)
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 

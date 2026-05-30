@@ -30,7 +30,7 @@ export interface WrappedStats {
   totalSpend: number
   byCategory: Record<string, { count: number; spend: number }>
   topVendors: { vendor: string; count: number }[]
-  mostExpensive: { vendor: string; amount: number; description: string; date: string } | null
+  mostExpensive: { vendor: string; amount: number; description: string; date: string; emailId: string } | null
   monthlySpend: Record<string, number>
   subscriptions: string[]
   subscriptionCount: number
@@ -104,6 +104,31 @@ export async function getMonitor(userId: string, period: 'month' | 'year'): Prom
   const res = await fetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
   if (!res.ok) throw new Error('Could not load the monitor')
   return res.json()
+}
+
+// ── Audit / transactions ───────────────────────────────────────────────────
+export interface Transaction {
+  id: string
+  date: string
+  category: string
+  vendor: string
+  amount: number | null
+  currency: string
+  description: string
+  emailId: string
+  senderEmail: string | null
+}
+
+export async function getTransactions(userId: string): Promise<Transaction[]> {
+  const res = await fetch(`${API}/transactions/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Could not load transactions')
+  const data = await res.json()
+  return data.transactions ?? []
+}
+
+/** Deep link to the exact Gmail message a record was extracted from. */
+export function gmailMessageUrl(emailId: string): string {
+  return `https://mail.google.com/mail/u/0/#all/${emailId}`
 }
 
 export async function upsertUser(id: string): Promise<UserStatus> {

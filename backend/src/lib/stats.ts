@@ -44,6 +44,7 @@ export interface MostExpensive {
   amount: number | null
   description: string
   date: Date
+  emailId: string
 }
 
 export interface WrappedStats {
@@ -230,7 +231,7 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
     byCategory,
     topVendors,
     mostExpensive: mostExpensive
-      ? { vendor: mostExpensive.vendor, amount: mostExpensive.amount, description: mostExpensive.description, date: mostExpensive.date }
+      ? { vendor: mostExpensive.vendor, amount: mostExpensive.amount, description: mostExpensive.description, date: mostExpensive.date, emailId: mostExpensive.emailId }
       : null,
     monthlySpend,
     subscriptions,

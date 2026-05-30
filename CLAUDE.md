@@ -183,6 +183,7 @@ model AccessRequest {              // invite requests from non-test-users
 | GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, trends, subscription/inbox monitors, auto-flags |
+| GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId`, for the Audit view + Gmail deep links |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |
 | GET | `/access/requests?key=` | Owner-only list of access requests (requires `ADMIN_KEY`) |
 | GET | `/health` | `{ok: true}` |

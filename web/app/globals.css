@@ -552,6 +552,66 @@ body {
 .flag-new  { background: #efeefe; color: var(--purple-dark); border-color: #dddaf9; }
 .flag-info { background: #f4f4f8; color: #555; border-color: var(--border); }
 
+/* ── Audit / transactions ───────────────────────────────────── */
+.audit-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.audit-search {
+  flex: 1 1 200px;
+  min-width: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--card);
+  color: var(--ink);
+}
+.audit-select {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 14px;
+  background: var(--card);
+  color: var(--ink);
+  cursor: pointer;
+}
+.txn {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+.txn:last-child { border-bottom: none; }
+.txn-main {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+}
+.txn-vendor { font-weight: 700; }
+.txn-amount { font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.txn-desc {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 3px 0 6px;
+}
+.txn-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  color: var(--muted);
+  text-transform: capitalize;
+}
+.txn-link {
+  color: var(--purple);
+  font-weight: 700;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.txn-link:hover { text-decoration: underline; }
+
 /* ── Print / Save as PDF ────────────────────────────────────── */
 @media print {
   .no-print { display: none !important; }
