@@ -102,11 +102,19 @@ Do I Want To Know/
 10. `GET /wrapped/:userId` aggregates all LedgerEntry rows into stats
 
 ### Web app flow (`web/`, primary client)
-1. **Page load** → `getUserId()` reads/creates a UUID in `localStorage`; `POST /users` checks connection status
-2. Not connected → **ConnectView**. "Connect Gmail" does a full-page redirect to `GET /auth/google?userId=<uuid>&redirect=<web origin>`
-3. After Google consent, the callback stores tokens and **redirects back to `<web origin>/?connected=1`**
-4. The page detects `?connected=1`, cleans the URL, re-fetches status, and renders **WrappedView**
-5. "Sync Emails" → `POST /emails/sync`. If the user synced within `SYNC_RATE_LIMIT_HOURS`, the backend returns **429** with a friendly message that the UI surfaces
+1. **Page load** → `getUserId()` reads/creates a UUID in `localStorage`. If a local cache of the Wrapped data exists, the dashboard renders **instantly** from it; the backend is then refreshed in the background (stale-while-revalidate, see `lib/cache.ts`)
+2. `POST /users` checks connection status
+3. Not connected → **ConnectView**. "Connect Gmail" does a full-page redirect to `GET /auth/google?userId=<uuid>&redirect=<web origin>`
+4. After Google consent, the callback resolves the **canonical user** (by Gmail address) and **redirects back to `<web origin>/?connected=1&uid=<canonicalId>`**
+5. The page adopts `uid` into `localStorage` (so this device converges onto the Gmail-keyed identity), cleans the URL, re-fetches status, and renders **WrappedView**
+6. "Sync Emails" → `POST /emails/sync`. If the user synced within `SYNC_RATE_LIMIT_HOURS`, the backend returns **429** with a friendly message that the UI surfaces
+
+### Identity model (cross-device)
+- A device starts with an anonymous UUID in `localStorage`. On OAuth, the backend (`resolveCanonicalUser` in `auth.ts`) keys identity by the **verified Gmail address**:
+  - If a user already owns that email → converge to it (so any device that connects the same Gmail sees the same data, no re-sync, no extra Claude cost)
+  - Else the requesting device id claims the email (or a fresh id is minted if that device id is already tied to a different email)
+- The callback returns `uid=<canonicalId>`; the web app stores it, so all subsequent calls use the canonical id.
+- **No schema change** was needed — `User.email` was already `@unique`. Viewing/aggregation (`/wrapped`, `/export`) never calls Claude; only `/emails/sync` does.
 
 ### Rate limiting
 - `User.lastSyncedAt` is stamped on every successful sync (including "already up to date")

@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { randomUUID } from 'node:crypto'
 import { google } from 'googleapis'
 import { getOAuthClient } from '../lib/gmail'
 import { prisma } from '../lib/prisma'
@@ -35,6 +36,36 @@ function safeRedirect(redirect?: string): string | null {
   return null
 }
 
+// Resolve the canonical user for a verified Gmail address. Identity is keyed by
+// the Gmail address (not the per-device UUID) so the same person sees the same
+// data on every device/browser without re-syncing.
+//
+//   - If a user already owns this email  → use it (cross-device convergence).
+//   - Else if the requesting device id is free (new, or already this email)
+//                                         → claim it for this email.
+//   - Else (device id belongs to another email) → mint a fresh canonical id.
+async function resolveCanonicalUser(requestedId: string, email: string | null): Promise<string> {
+  if (email) {
+    const owner = await prisma.user.findUnique({ where: { email } })
+    if (owner) return owner.id
+  }
+
+  const requested = await prisma.user.findUnique({ where: { id: requestedId } })
+  if (!requested || requested.email == null || requested.email === email) {
+    await prisma.user.upsert({
+      where:  { id: requestedId },
+      create: { id: requestedId, email: email ?? undefined },
+      update: { email: email ?? undefined },
+    })
+    return requestedId
+  }
+
+  // Requested device id is already tied to a different email — don't clobber it.
+  const freshId = randomUUID()
+  await prisma.user.create({ data: { id: freshId, email: email ?? undefined } })
+  return freshId
+}
+
 // Step 1 — redirect the user to Google's consent screen.
 // Web app opens: GET /auth/google?userId=<uuid>&redirect=<frontend origin>
 router.get('/google', (req, res) => {
@@ -58,30 +89,28 @@ router.get('/google/callback', async (req, res) => {
   const { code, state } = req.query as { code: string; state: string }
   if (!code || !state) return void res.status(400).send('Invalid callback parameters')
 
-  const { userId, redirect } = decodeState(state)
+  const { userId: requestedId, redirect } = decodeState(state)
 
   const oauth2Client = getOAuthClient()
   const { tokens } = await oauth2Client.getToken(code)
   oauth2Client.setCredentials(tokens)
 
-  // Fetch the user's Gmail address
+  // Fetch the user's verified Gmail address
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
   const { data } = await oauth2.userinfo.get()
+  const email = data.email ?? null
 
-  // Upsert user record (device UUID is already the PK)
-  await prisma.user.upsert({
-    where: { id: userId },
-    create: { id: userId, email: data.email ?? undefined },
-    update: { email: data.email ?? undefined },
-  })
+  // Identity is keyed by Gmail address, so the same person converges to one
+  // canonical user across every device.
+  const canonicalId = await resolveCanonicalUser(requestedId, email)
 
-  // Upsert OAuth tokens — on re-auth, Google may not return a new refresh token,
-  // so we fall back to the existing one if absent
-  const existing = await prisma.oAuthToken.findUnique({ where: { userId } })
+  // Upsert OAuth tokens under the canonical user — on re-auth Google may not
+  // return a new refresh token, so fall back to the existing one if absent.
+  const existing = await prisma.oAuthToken.findUnique({ where: { userId: canonicalId } })
   await prisma.oAuthToken.upsert({
-    where: { userId },
+    where: { userId: canonicalId },
     create: {
-      userId,
+      userId: canonicalId,
       accessToken: tokens.access_token!,
       refreshToken: tokens.refresh_token!,
       expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
@@ -93,10 +122,11 @@ router.get('/google/callback', async (req, res) => {
     },
   })
 
-  // Web flow: redirect back to the frontend so it can show the dashboard.
+  // Web flow: redirect back to the frontend with the canonical id so the device
+  // adopts it (and thereby sees this Gmail's data on every device).
   const target = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
   if (target) {
-    return void res.redirect(`${target}/?connected=1`)
+    return void res.redirect(`${target}/?connected=1&uid=${encodeURIComponent(canonicalId)}`)
   }
 
   // Fallback (mobile / no frontend configured): show a "close this tab" page

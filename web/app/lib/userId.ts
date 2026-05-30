@@ -12,3 +12,13 @@ export function getUserId(): string {
   }
   return id
 }
+
+/**
+ * Adopt a canonical user id returned by the backend after OAuth, so this
+ * device converges onto the Gmail-keyed identity and sees the same data
+ * everywhere. No-op if it already matches.
+ */
+export function setUserId(id: string): void {
+  if (typeof window === 'undefined' || !id) return
+  window.localStorage.setItem(KEY, id)
+}

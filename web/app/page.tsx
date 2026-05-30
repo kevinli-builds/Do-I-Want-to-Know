@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { getUserId } from './lib/userId'
+import { getUserId, setUserId as persistUserId } from './lib/userId'
 import { upsertUser, getWrapped, type WrappedData } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
@@ -29,12 +29,21 @@ export default function Home() {
 
   useEffect(() => {
     async function init() {
-      const id = getUserId()
-      setUserId(id)
+      let id = getUserId()
 
+      // Returning from the OAuth flow: adopt the canonical user id the backend
+      // resolved from the Gmail address, so this device converges onto the same
+      // identity (and data) as any other device that connected this Gmail.
       if (typeof window !== 'undefined' && window.location.search.includes('connected=1')) {
+        const uid = new URLSearchParams(window.location.search).get('uid')
+        if (uid && uid !== id) {
+          persistUserId(uid)
+          id = uid
+        }
         window.history.replaceState({}, '', window.location.pathname)
       }
+
+      setUserId(id)
 
       // 1. Instant render from local cache, if we have prior results.
       const cached = loadWrappedCache(id)
