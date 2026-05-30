@@ -70,6 +70,17 @@ export async function upsertUser(id: string): Promise<UserStatus> {
   return res.json()
 }
 
+// Ask the owner to be added as a test user (for people not yet on the list).
+export async function requestAccess(email: string): Promise<void> {
+  const res = await fetch(`${API}/access/request`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email }),
+  })
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) throw new Error(data.error ?? 'Could not submit your request')
+}
+
 // Full-page navigation to start the Google OAuth flow. The backend redirects
 // back to this origin with ?connected=1 once Gmail is connected.
 export function startConnect(userId: string): void {

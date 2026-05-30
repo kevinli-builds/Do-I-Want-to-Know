@@ -1,6 +1,7 @@
 'use client'
 
-import { startConnect } from '../lib/api'
+import { useState } from 'react'
+import { startConnect, requestAccess } from '../lib/api'
 
 export function ConnectView({
   userId,
@@ -9,6 +10,24 @@ export function ConnectView({
   userId: string
   slowStart?: boolean
 }) {
+  const [showForm, setShowForm] = useState(false)
+  const [email, setEmail] = useState('')
+  const [status, setStatus] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
+  const [errorMsg, setErrorMsg] = useState('')
+
+  async function submitRequest(e: React.FormEvent) {
+    e.preventDefault()
+    setStatus('sending')
+    setErrorMsg('')
+    try {
+      await requestAccess(email.trim())
+      setStatus('done')
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : 'Something went wrong')
+      setStatus('error')
+    }
+  }
+
   return (
     <div className="connect">
       <div className="emoji">📬</div>
@@ -44,6 +63,39 @@ export function ConnectView({
         We only read metadata (sender, subject, date, snippet) from purchase emails — never the
         full body of any message. You can disconnect anytime.
       </p>
+
+      {/* Request access — for people not yet added as test users */}
+      <div className="request-access">
+        {status === 'done' ? (
+          <p className="request-done">
+            ✓ Request sent! You&apos;ll be added soon — try connecting again later.
+          </p>
+        ) : !showForm ? (
+          <button className="request-link" onClick={() => setShowForm(true)}>
+            Blocked by Google? Request access →
+          </button>
+        ) : (
+          <form className="request-form" onSubmit={submitRequest}>
+            <p className="request-hint">
+              This app is invite-only while in testing. Enter your Gmail and we&apos;ll add you.
+            </p>
+            <div className="request-row">
+              <input
+                type="email"
+                required
+                placeholder="you@gmail.com"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="request-input"
+              />
+              <button type="submit" className="btn" disabled={status === 'sending'}>
+                {status === 'sending' ? 'Sending…' : 'Request'}
+              </button>
+            </div>
+            {status === 'error' && <p className="request-error">{errorMsg}</p>}
+          </form>
+        )}
+      </div>
     </div>
   )
 }

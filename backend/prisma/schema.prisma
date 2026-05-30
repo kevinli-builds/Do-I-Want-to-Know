@@ -43,3 +43,11 @@ model LedgerEntry {
 
   @@unique([userId, emailId])
 }
+
+// Someone who isn't a test user yet asking to be added (Testing-mode access).
+model AccessRequest {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+}

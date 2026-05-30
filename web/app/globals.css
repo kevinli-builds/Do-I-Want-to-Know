@@ -97,6 +97,57 @@ body {
   line-height: 1.5;
 }
 
+/* ── Request access ─────────────────────────────────────────── */
+.request-access {
+  margin-top: 26px;
+  min-height: 40px;
+}
+.request-link {
+  background: none;
+  border: none;
+  color: var(--purple);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px;
+}
+.request-link:hover {
+  text-decoration: underline;
+}
+.request-hint {
+  color: var(--muted);
+  font-size: 13px;
+  max-width: 360px;
+  line-height: 1.5;
+  margin-bottom: 10px;
+}
+.request-row {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.request-input {
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 15px;
+  min-width: 200px;
+  outline: none;
+}
+.request-input:focus {
+  border-color: var(--purple);
+}
+.request-done {
+  color: #1a7f4b;
+  font-size: 14px;
+  font-weight: 600;
+}
+.request-error {
+  color: #c0334a;
+  font-size: 13px;
+  margin-top: 8px;
+}
+
 /* ── Dashboard header ───────────────────────────────────────── */
 .header {
   display: flex;

@@ -62,7 +62,8 @@ Do I Want To Know/
 │   │       ├── 20260526013950_init/           Original migration (survey platform tables)
 │   │       ├── 20260527000000_gmail_wrapped/  Drops survey tables, adds email/OAuth/ledger
 │   │       ├── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
-│   │       └── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
+│   │       ├── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
+│   │       └── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -160,6 +161,13 @@ model LedgerEntry {
   createdAt   DateTime @default(now())
   @@unique([userId, emailId])
 }
+
+model AccessRequest {              // invite requests from non-test-users
+  id        String   @id @default(cuid())
+  email     String   @unique
+  note      String?
+  createdAt DateTime @default(now())
+}
 ```
 
 ---
@@ -172,7 +180,10 @@ model LedgerEntry {
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
 | GET | `/auth/google/callback` | OAuth callback — stores tokens, then redirects to `<redirect>/?connected=1` (web) or shows a "close tab" page (mobile) |
 | POST | `/emails/sync` | `{userId}` → fetch+extract new emails, returns `{synced, total}`. Rate-limited per user (429 if synced within `SYNC_RATE_LIMIT_HOURS`) |
-| GET | `/wrapped/:userId` | Returns full Wrapped stats object |
+| GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
+| GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
+| POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |
+| GET | `/access/requests?key=` | Owner-only list of access requests (requires `ADMIN_KEY`) |
 | GET | `/health` | `{ok: true}` |
 | GET | `/privacy` | HTML privacy policy page |
 
@@ -189,6 +200,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 BASE_URL=https://your-render-url     # Used to build the OAuth callback URL
 FRONTEND_URL=https://your-vercel-url # Web app origin — callback redirects here after connect
 SYNC_RATE_LIMIT_HOURS=24             # Optional, per-user min hours between /emails/sync (default 24, 0 disables)
+ACCESS_WEBHOOK_URL=https://...       # Optional, Discord/Slack incoming webhook — pinged on new access requests
+ADMIN_KEY=...                        # Optional, protects GET /access/requests (owner-only list)
 PORT=3000                            # Optional, defaults to 3000
 ```
 
