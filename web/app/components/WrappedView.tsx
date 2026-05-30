@@ -25,13 +25,26 @@ function categoryEmoji(cat: string) {
   return CATEGORY_META[cat]?.emoji ?? '•'
 }
 
+function relativeTime(ts: number): string {
+  const secs = Math.floor((Date.now() - ts) / 1000)
+  if (secs < 60) return 'just now'
+  const mins = Math.floor(secs / 60)
+  if (mins < 60) return `${mins} min ago`
+  const hrs = Math.floor(mins / 60)
+  if (hrs < 24) return `${hrs}h ago`
+  const days = Math.floor(hrs / 24)
+  return `${days} day${days === 1 ? '' : 's'} ago`
+}
+
 export function WrappedView({
   userId,
   data,
+  cachedAt,
   onRefresh,
 }: {
   userId: string
   data: WrappedData
+  cachedAt?: number | null
   onRefresh: () => Promise<void>
 }) {
   const [syncing, setSyncing] = useState(false)
@@ -68,6 +81,11 @@ export function WrappedView({
         <div>
           <h1>Your Wrapped</h1>
           {data.email && <div className="email">{data.email}</div>}
+          {cachedAt && (
+            <div className="email" style={{ fontSize: 12 }}>
+              Saved locally · updated {relativeTime(cachedAt)}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {data.totalEntries > 0 && (

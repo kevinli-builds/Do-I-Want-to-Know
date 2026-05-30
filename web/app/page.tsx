@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId } from './lib/userId'
 import { upsertUser, getWrapped, type WrappedData } from './lib/api'
+import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
 
@@ -10,16 +11,20 @@ export default function Home() {
   const [userId,    setUserId]    = useState('')
   const [connected, setConnected] = useState(false)
   const [wrapped,   setWrapped]   = useState<WrappedData | null>(null)
+  const [cachedAt,  setCachedAt]  = useState<number | null>(null)
   const [loading,   setLoading]   = useState(true)
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
   const slowStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  // Fetch fresh data from the backend and update both state + local cache.
   const loadWrapped = useCallback(async (id: string) => {
     const data = await getWrapped(id)
     setWrapped(data)
     setConnected(data.connected)
+    saveWrappedCache(id, data)
+    setCachedAt(Date.now())
   }, [])
 
   useEffect(() => {
@@ -31,30 +36,45 @@ export default function Home() {
         window.history.replaceState({}, '', window.location.pathname)
       }
 
-      // After 8 s with no backend response, stop blocking the UI and show the
-      // Connect screen. The fetch stays in-flight — if the server eventually
-      // wakes up and the user is already connected, the app auto-transitions.
-      slowStartTimerRef.current = setTimeout(() => {
+      // 1. Instant render from local cache, if we have prior results.
+      const cached = loadWrappedCache(id)
+      const haveCache = !!cached?.data?.connected
+      if (haveCache) {
+        setWrapped(cached!.data)
+        setConnected(true)
+        setCachedAt(cached!.cachedAt)
         setLoading(false)
-        setSlowStart(true)
-      }, 8000)
+      } else {
+        // No cache: only then do we need the cold-start fallback timer so we
+        // don't spin forever while Render wakes up.
+        slowStartTimerRef.current = setTimeout(() => {
+          setLoading(false)
+          setSlowStart(true)
+        }, 8000)
+      }
 
+      // 2. Refresh from the backend in the background (stale-while-revalidate).
       try {
         const status = await upsertUser(id)
-
-        // Backend responded — clear the fallback timer and proceed normally
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
 
         if (status.connected) {
           await loadWrapped(id)
         } else {
+          // Server authoritatively says not connected (e.g. Gmail disconnected
+          // or token revoked) — drop any stale cache and show Connect.
           setConnected(false)
+          clearWrappedCache(id)
+          setWrapped(null)
+          setCachedAt(null)
         }
       } catch {
+        // Backend unreachable / cold. Keep showing cached data if we have it;
+        // otherwise fall back to the Connect screen.
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
-        setConnected(false)
+        if (!haveCache) setConnected(false)
       } finally {
         setLoading(false)
       }
@@ -79,7 +99,14 @@ export default function Home() {
   }
 
   if (connected && wrapped) {
-    return <WrappedView userId={userId} data={wrapped} onRefresh={() => loadWrapped(userId)} />
+    return (
+      <WrappedView
+        userId={userId}
+        data={wrapped}
+        cachedAt={cachedAt}
+        onRefresh={() => loadWrapped(userId)}
+      />
+    )
   }
 
   return <ConnectView userId={userId} slowStart={slowStart} />
