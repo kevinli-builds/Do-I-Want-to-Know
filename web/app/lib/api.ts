@@ -9,6 +9,23 @@ export interface UserStatus {
   connected: boolean
 }
 
+export interface SubscriptionInsight {
+  vendor: string
+  monthlyEstimate: number
+  lastAmount: number | null
+  cadence: 'weekly' | 'monthly' | 'annual'
+  lastCharge: string
+  chargeCount: number
+  active: boolean
+}
+
+export interface SpammerStat {
+  vendor: string
+  count: number
+  senderEmail: string | null
+  unsubscribe: string | null
+}
+
 export interface WrappedStats {
   totalSpend: number
   byCategory: Record<string, { count: number; spend: number }>
@@ -17,7 +34,10 @@ export interface WrappedStats {
   monthlySpend: Record<string, number>
   subscriptions: string[]
   subscriptionCount: number
-  topSpammers: { vendor: string; count: number }[]
+  subscriptionInsights: SubscriptionInsight[]
+  monthlySubscriptionCost: number
+  annualSubscriptionCost: number
+  topSpammers: SpammerStat[]
   charities: { vendor: string; count: number; total: number }[]
   charityTotal: number
 }

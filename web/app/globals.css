@@ -334,3 +334,50 @@ body {
   color: var(--muted);
   text-align: center;
 }
+
+/* ── Subscription radar meta ────────────────────────────────── */
+.sub-meta {
+  display: block;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+
+/* ── Unsubscribe helper ─────────────────────────────────────── */
+.spammer {
+  border-bottom: 1px solid var(--border);
+  padding: 10px 0;
+}
+.spammer:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.spammer-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  padding-left: 32px;
+}
+.link-btn {
+  font-size: 12px;
+  font-weight: 700;
+  text-decoration: none;
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: var(--purple);
+  color: #fff;
+  transition: background 0.12s ease;
+}
+.link-btn:hover {
+  background: var(--purple-dark);
+}
+.link-btn.ghost {
+  background: transparent;
+  color: var(--purple);
+  border: 1px solid var(--border);
+}
+.link-btn.ghost:hover {
+  background: #efeefe;
+}

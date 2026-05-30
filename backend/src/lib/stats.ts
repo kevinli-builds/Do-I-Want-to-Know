@@ -22,6 +22,23 @@ export interface CharityStat {
   total: number
 }
 
+export interface SpammerStat {
+  vendor: string
+  count: number
+  senderEmail: string | null
+  unsubscribe: string | null
+}
+
+export interface SubscriptionInsight {
+  vendor: string
+  monthlyEstimate: number          // cost normalized to a monthly figure
+  lastAmount: number | null        // most recent known charge amount
+  cadence: 'weekly' | 'monthly' | 'annual'
+  lastCharge: string               // ISO date of most recent charge
+  chargeCount: number
+  active: boolean                  // charged within the expected recency window
+}
+
 export interface MostExpensive {
   vendor: string
   amount: number | null
@@ -37,7 +54,10 @@ export interface WrappedStats {
   monthlySpend: Record<string, number>
   subscriptions: string[]
   subscriptionCount: number
-  topSpammers: VendorStat[]
+  subscriptionInsights: SubscriptionInsight[]
+  monthlySubscriptionCost: number
+  annualSubscriptionCost: number
+  topSpammers: SpammerStat[]
   charities: CharityStat[]
   charityTotal: number
 }
@@ -61,6 +81,87 @@ function topByFreq(entries: LedgerEntry[], limit: number): VendorStat[] {
     .sort((a, b) => b[1] - a[1])
     .slice(0, limit)
     .map(([vendor, count]) => ({ vendor, count }))
+}
+
+// Rank marketing senders by volume, enriched with the most recent sender email
+// + unsubscribe link so the UI can offer a one-click unsubscribe.
+// Assumes `marketingEntries` is sorted newest-first.
+function topSpammersFrom(marketingEntries: LedgerEntry[], limit: number): SpammerStat[] {
+  const acc: Record<string, SpammerStat> = {}
+  for (const e of marketingEntries) {
+    if (!acc[e.vendor]) {
+      acc[e.vendor] = {
+        vendor: e.vendor,
+        count: 0,
+        senderEmail: e.senderEmail ?? null,
+        unsubscribe: e.unsubscribe ?? null,
+      }
+    }
+    const s = acc[e.vendor]
+    s.count++
+    // Backfill from older emails if the newest lacked the field
+    if (!s.senderEmail && e.senderEmail) s.senderEmail = e.senderEmail
+    if (!s.unsubscribe && e.unsubscribe) s.unsubscribe = e.unsubscribe
+  }
+  return Object.values(acc)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+}
+
+// Analyze subscription entries per vendor: detect cadence from the gaps between
+// charges, estimate a normalized monthly cost, and flag whether it's still active.
+function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
+  insights: SubscriptionInsight[]
+  monthlyCost: number
+  annualCost: number
+} {
+  const byVendor: Record<string, LedgerEntry[]> = {}
+  for (const e of subEntries) (byVendor[e.vendor] ??= []).push(e)
+
+  const insights: SubscriptionInsight[] = Object.entries(byVendor).map(([vendor, list]) => {
+    const sorted = [...list].sort((a, b) => a.date.getTime() - b.date.getTime())
+    const withAmount = sorted.filter(e => e.amount != null && e.amount > 0)
+    const lastAmount = withAmount.length ? withAmount[withAmount.length - 1].amount! : null
+
+    // Median gap between consecutive charges (days)
+    let medianGap = 30.44 // assume monthly when we only have one sighting
+    if (sorted.length >= 2) {
+      const gaps: number[] = []
+      for (let i = 1; i < sorted.length; i++) {
+        gaps.push((sorted[i].date.getTime() - sorted[i - 1].date.getTime()) / 86_400_000)
+      }
+      gaps.sort((a, b) => a - b)
+      medianGap = gaps[Math.floor(gaps.length / 2)] || 30.44
+    }
+
+    let cadence: SubscriptionInsight['cadence']
+    if (medianGap <= 10) cadence = 'weekly'
+    else if (medianGap > 250) cadence = 'annual'
+    else cadence = 'monthly'
+
+    const monthlyEstimate = lastAmount != null ? round2(lastAmount * (30.44 / medianGap)) : 0
+
+    const lastCharge = sorted[sorted.length - 1].date
+    const ageDays = (Date.now() - lastCharge.getTime()) / 86_400_000
+    const active = cadence === 'annual' ? ageDays <= 400 : ageDays <= 45
+
+    return {
+      vendor,
+      monthlyEstimate,
+      lastAmount,
+      cadence,
+      lastCharge: lastCharge.toISOString().slice(0, 10),
+      chargeCount: list.length,
+      active,
+    }
+  })
+
+  insights.sort((a, b) => b.monthlyEstimate - a.monthlyEstimate)
+  // "Current burn" counts active subscriptions only
+  const monthlyCost = round2(
+    insights.filter(i => i.active).reduce((sum, i) => sum + i.monthlyEstimate, 0)
+  )
+  return { insights, monthlyCost, annualCost: round2(monthlyCost * 12) }
 }
 
 // ── Main aggregation ──────────────────────────────────────────────────────────
@@ -105,12 +206,12 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
   }
 
   // Subscriptions
-  const subscriptions = [...new Set(
-    entries.filter(e => e.category === 'subscription').map(e => e.vendor)
-  )]
+  const subEntries = entries.filter(e => e.category === 'subscription')
+  const subscriptions = [...new Set(subEntries.map(e => e.vendor))]
+  const subRadar = computeSubscriptionInsights(subEntries)
 
-  // Top marketing senders
-  const topSpammers = topByFreq(marketingEntries, 10)
+  // Top marketing senders (with unsubscribe metadata)
+  const topSpammers = topSpammersFrom(marketingEntries, 10)
 
   // Charities
   const charityMap: Record<string, { count: number; total: number }> = {}
@@ -134,6 +235,9 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
     monthlySpend,
     subscriptions,
     subscriptionCount: subscriptions.length,
+    subscriptionInsights: subRadar.insights,
+    monthlySubscriptionCost: subRadar.monthlyCost,
+    annualSubscriptionCost: subRadar.annualCost,
     topSpammers,
     charities,
     charityTotal,

@@ -60,6 +60,9 @@ router.post('/sync', async (req, res) => {
   // Claude extracts structured data in batches
   const extracted = await extractEntries(newEmails)
 
+  // Look up raw email metadata (sender / unsubscribe) by id when persisting
+  const rawById = new Map(newEmails.map(e => [e.id, e]))
+
   // Persist only non-null results
   const rows = Array.from(extracted.entries())
     .filter((pair): pair is [string, NonNullable<(typeof extracted extends Map<string, infer V> ? V : never)>] =>
@@ -74,6 +77,8 @@ router.post('/sync', async (req, res) => {
       currency: entry.currency ?? 'USD',
       date: new Date(entry.date),
       description: entry.description,
+      senderEmail: rawById.get(emailId)?.senderEmail ?? null,
+      unsubscribe: rawById.get(emailId)?.unsubscribe ?? null,
     }))
 
   await prisma.ledgerEntry.createMany({ data: rows, skipDuplicates: true })

@@ -15,6 +15,26 @@ export interface RawEmail {
   from: string
   date: string
   snippet: string
+  senderEmail: string | null
+  unsubscribe: string | null
+}
+
+// Parse the bare email address out of a From header ("Nike <news@nike.com>")
+export function parseSenderEmail(from: string): string | null {
+  const angled = from.match(/<([^>]+)>/)
+  const raw = (angled ? angled[1] : from).trim()
+  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw) ? raw.toLowerCase() : null
+}
+
+// Pick the best link out of a List-Unsubscribe header (prefer https one-click,
+// fall back to mailto). Header looks like: <https://...>, <mailto:...>
+export function parseUnsubscribe(header: string): string | null {
+  if (!header) return null
+  const links = [...header.matchAll(/<([^>]+)>/g)].map(m => m[1].trim())
+  const http = links.find(l => /^https?:/i.test(l))
+  if (http) return http
+  const mail = links.find(l => /^mailto:/i.test(l))
+  return mail ?? null
 }
 
 export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
@@ -98,20 +118,24 @@ export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
         userId: 'me',
         id,
         format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date'],
+        metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
       })
     )
   )
 
   return fetched.map(res => {
     const headers = res.data.payload?.headers ?? []
-    const get = (name: string) => headers.find(h => h.name === name)?.value ?? ''
+    const get = (name: string) =>
+      headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+    const from = get('From')
     return {
       id: res.data.id!,
       subject: get('Subject'),
-      from: get('From'),
+      from,
       date: get('Date'),
       snippet: res.data.snippet ?? '',
+      senderEmail: parseSenderEmail(from),
+      unsubscribe: parseUnsubscribe(get('List-Unsubscribe')),
     }
   })
 }

@@ -61,7 +61,8 @@ Do I Want To Know/
 │   │   └── migrations/
 │   │       ├── 20260526013950_init/           Original migration (survey platform tables)
 │   │       ├── 20260527000000_gmail_wrapped/  Drops survey tables, adds email/OAuth/ledger
-│   │       └── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
+│   │       ├── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
+│   │       └── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -147,13 +148,15 @@ model OAuthToken {
 model LedgerEntry {
   id          String   @id @default(cuid())
   userId      String
-  category    String   // order | subscription | travel | food | entertainment | other
+  category    String   // order | subscription | travel | food | entertainment | charity | marketing | other
   vendor      String
   amount      Float?
   currency    String   @default("USD")
   date        DateTime
   description String
   emailId     String   // Gmail message ID — unique per user for deduplication
+  senderEmail String?  // parsed From address — powers the unsubscribe helper
+  unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
   createdAt   DateTime @default(now())
   @@unique([userId, emailId])
 }

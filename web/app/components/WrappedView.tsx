@@ -37,6 +37,17 @@ function relativeTime(ts: number): string {
   return `${days} day${days === 1 ? '' : 's'} ago`
 }
 
+// Deep link into Gmail filtered to a sender, so the user can bulk-manage.
+function gmailSearchUrl(email: string): string {
+  return `https://mail.google.com/mail/u/0/#search/${encodeURIComponent(`from:(${email})`)}`
+}
+
+function shortDate(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
 export function WrappedView({
   userId,
   data,
@@ -208,22 +219,48 @@ export function WrappedView({
             </div>
           )}
 
-          {/* ── Who Spams You Most ─────────────────────────────────── */}
+          {/* ── Who Spams You Most + Unsubscribe ───────────────────── */}
           {stats.topSpammers.length > 0 && (
             <div className="card">
               <h2>📬 Who Emails You Most</h2>
               <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 14 }}>
-                Brands sending you the most promotional email
+                Top promotional senders — unsubscribe or jump to them in Gmail
               </p>
               {stats.topSpammers.map((s, i) => (
-                <div className="row" key={s.vendor}>
-                  <span className="label">
-                    <span className="rank">{i + 1}</span>
-                    {s.vendor}
-                  </span>
-                  <span className="value">
-                    {s.count} email{s.count === 1 ? '' : 's'}
-                  </span>
+                <div className="spammer" key={s.vendor}>
+                  <div className="row" style={{ borderBottom: 'none', padding: '2px 0' }}>
+                    <span className="label">
+                      <span className="rank">{i + 1}</span>
+                      {s.vendor}
+                    </span>
+                    <span className="value">
+                      {s.count} email{s.count === 1 ? '' : 's'}
+                    </span>
+                  </div>
+                  {(s.unsubscribe || s.senderEmail) && (
+                    <div className="spammer-actions">
+                      {s.unsubscribe && (
+                        <a
+                          className="link-btn"
+                          href={s.unsubscribe}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Unsubscribe
+                        </a>
+                      )}
+                      {s.senderEmail && (
+                        <a
+                          className="link-btn ghost"
+                          href={gmailSearchUrl(s.senderEmail)}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          Find in Gmail
+                        </a>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -268,8 +305,39 @@ export function WrappedView({
             </div>
           )}
 
-          {/* ── Subscriptions ──────────────────────────────────────── */}
-          {stats.subscriptions.length > 0 && (
+          {/* ── Subscription Radar ─────────────────────────────────── */}
+          {stats.subscriptionInsights && stats.subscriptionInsights.length > 0 ? (
+            <div className="card">
+              <h2>🔁 Subscription Radar</h2>
+              {stats.monthlySubscriptionCost > 0 && (
+                <p style={{ color: 'var(--muted)', fontSize: 13, marginBottom: 14 }}>
+                  ~{money(stats.monthlySubscriptionCost)}/mo · ~{money(stats.annualSubscriptionCost)}/yr
+                  in active subscriptions
+                </p>
+              )}
+              {stats.subscriptionInsights.map((s) => (
+                <div className="row" key={s.vendor}>
+                  <span className="label" style={{ opacity: s.active ? 1 : 0.5 }}>
+                    {s.vendor}
+                    <span className="sub-meta">
+                      {s.cadence}
+                      {!s.active
+                        ? ' · no recent charge'
+                        : s.lastCharge
+                          ? ` · last ${shortDate(s.lastCharge)}`
+                          : ''}
+                    </span>
+                  </span>
+                  <span className="value">
+                    {s.monthlyEstimate > 0 ? `${money(s.monthlyEstimate)}/mo` : '—'}
+                  </span>
+                </div>
+              ))}
+              <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 12 }}>
+                Estimates inferred from email receipts — costs normalized to a monthly figure.
+              </p>
+            </div>
+          ) : stats.subscriptions.length > 0 ? (
             <div className="card">
               <h2>🔁 Subscriptions</h2>
               <div>
@@ -280,7 +348,7 @@ export function WrappedView({
                 ))}
               </div>
             </div>
-          )}
+          ) : null}
         </>
       )}
     </div>

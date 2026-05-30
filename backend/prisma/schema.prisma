@@ -37,6 +37,8 @@ model LedgerEntry {
   date        DateTime
   description String
   emailId     String   // Gmail message ID — used for deduplication
+  senderEmail String?  // parsed From address (for the unsubscribe helper)
+  unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
   createdAt   DateTime @default(now())
 
   @@unique([userId, emailId])
