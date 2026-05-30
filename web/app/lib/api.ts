@@ -17,6 +17,9 @@ export interface WrappedStats {
   monthlySpend: Record<string, number>
   subscriptions: string[]
   subscriptionCount: number
+  topSpammers: { vendor: string; count: number }[]
+  charities: { vendor: string; count: number; total: number }[]
+  charityTotal: number
 }
 
 export interface WrappedData {

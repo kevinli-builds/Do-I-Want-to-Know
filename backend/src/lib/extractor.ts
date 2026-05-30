@@ -3,7 +3,15 @@ import Anthropic from '@anthropic-ai/sdk'
 const anthropic = new Anthropic()
 
 export interface ExtractedEntry {
-  category: 'order' | 'subscription' | 'travel' | 'food' | 'entertainment' | 'other'
+  category:
+    | 'order'
+    | 'subscription'
+    | 'travel'
+    | 'food'
+    | 'entertainment'
+    | 'charity'
+    | 'marketing'
+    | 'other'
   vendor: string
   amount?: number
   currency: string
@@ -32,27 +40,37 @@ export async function extractEntries(
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 4096,
-      system: `You extract structured purchase/subscription/travel data from email metadata.
-For each email, return null if it is NOT a purchase, subscription, booking, or delivery confirmation.
-Otherwise return a structured object.
+      system: `You classify emails into structured records for an inbox analytics dashboard.
+
+Return null ONLY for: personal emails, replies, calendar invites, password resets, login codes, or other emails with no category below.
+
+For every other email, return a structured object.
 
 Respond ONLY with a JSON object mapping the email index (as a string) to either null or:
 {
-  "category": "order" | "subscription" | "travel" | "food" | "entertainment" | "other",
-  "vendor": "<brand name, e.g. Amazon>",
-  "amount": <number or omit if unknown>,
+  "category": "order" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "other",
+  "vendor": "<clean brand name, e.g. 'Amazon' not 'noreply@amazon.com'>",
+  "amount": <number or omit if unknown/not a financial transaction>,
   "currency": "<ISO code, default USD>",
   "date": "<YYYY-MM-DD>",
-  "description": "<one short line describing the transaction>"
+  "description": "<one short line, e.g. 'Nike summer sale promo' or 'Donation to Red Cross'>"
 }
 
 Category guide:
-- order: physical or digital product purchase (Amazon, Best Buy, etc.)
-- subscription: recurring service charge (Netflix, Spotify, iCloud, gym, etc.)
-- travel: flights, hotels, car rentals, rideshare
+- order: physical or digital product purchase (Amazon, eBay, Best Buy, Etsy, etc.)
+- subscription: recurring service charge (Netflix, Spotify, iCloud, gym, SaaS, etc.)
+- travel: flights, hotels, car rentals, rideshare (Uber, Lyft, Airbnb, etc.)
 - food: restaurants, food delivery (Uber Eats, DoorDash, Grubhub, etc.)
-- entertainment: tickets, games, streaming one-offs
-- other: any other confirmed purchase`,
+- entertainment: event tickets, games, streaming one-offs
+- charity: donations to nonprofits, charities, crowdfunding (GoFundMe, etc.) — use amount if present
+- marketing: promotional newsletters, deals, sales announcements, coupon emails, brand updates — use vendor = the sending brand; omit amount
+- other: any other confirmed purchase or financial notification not covered above
+
+Key rules:
+- "marketing" is for bulk/promotional email from businesses (newsletters, flash sales, "we miss you", coupon codes, etc.)
+- Real purchase receipts or order confirmations are NEVER marketing — classify them by type (order, food, etc.)
+- Charity thank-you / receipt emails ARE charity, not marketing
+- If unsure between marketing and null, pick marketing for any brand promotional email`,
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -42,26 +42,61 @@ export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
   })
 
   const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
-
   const oneYearAgo = Math.floor((Date.now() - 365 * 24 * 60 * 60 * 1000) / 1000)
-  const listRes = await gmail.users.messages.list({
-    userId: 'me',
-    q: [
-      `after:${oneYearAgo}`,
-      '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
-      'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
-    ].join(' '),
-    maxResults: 200,
-  })
 
-  const messages = listRes.data.messages ?? []
-  if (messages.length === 0) return []
+  // Run three searches in parallel then merge + deduplicate:
+  //   1. Purchase/receipt emails (order confirmations, invoices, subscriptions, etc.)
+  //   2. Promotional / marketing emails (Gmail's Promotions category tab)
+  //   3. Charity / donation emails
+  const [purchaseRes, promoRes, charityRes] = await Promise.all([
+    gmail.users.messages.list({
+      userId: 'me',
+      maxResults: 200,
+      q: [
+        `after:${oneYearAgo}`,
+        '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
+        'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
+      ].join(' '),
+    }),
+    gmail.users.messages.list({
+      userId: 'me',
+      maxResults: 300,
+      q: `after:${oneYearAgo} category:promotions`,
+    }),
+    gmail.users.messages.list({
+      userId: 'me',
+      maxResults: 100,
+      q: [
+        `after:${oneYearAgo}`,
+        '(subject:donation OR subject:donate OR subject:"your donation"',
+        'OR subject:"your gift" OR subject:"thank you for your gift"',
+        'OR subject:"tax receipt" OR subject:"tax deductible" OR subject:"charitable")',
+      ].join(' '),
+    }),
+  ])
 
+  // Merge all message IDs, deduplicating by id
+  const seen = new Set<string>()
+  const allIds: string[] = []
+  for (const msg of [
+    ...(purchaseRes.data.messages ?? []),
+    ...(promoRes.data.messages ?? []),
+    ...(charityRes.data.messages ?? []),
+  ]) {
+    if (msg.id && !seen.has(msg.id)) {
+      seen.add(msg.id)
+      allIds.push(msg.id)
+    }
+  }
+
+  if (allIds.length === 0) return []
+
+  // Fetch metadata for all messages in parallel
   const fetched = await Promise.all(
-    messages.map(({ id }) =>
+    allIds.map(id =>
       gmail.users.messages.get({
         userId: 'me',
-        id: id!,
+        id,
         format: 'metadata',
         metadataHeaders: ['From', 'Subject', 'Date'],
       })
