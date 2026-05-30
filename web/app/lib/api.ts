@@ -26,6 +26,8 @@ export interface WrappedData {
   connected: boolean
   email: string | null
   totalEntries: number
+  year: number | null
+  availableYears: number[]
   stats: WrappedStats | null
 }
 
@@ -53,8 +55,9 @@ export function startConnect(userId: string): void {
     `${API}/auth/google?userId=${encodeURIComponent(userId)}&redirect=${encodeURIComponent(redirect)}`
 }
 
-export async function getWrapped(userId: string): Promise<WrappedData> {
-  const res = await fetch(`${API}/wrapped/${encodeURIComponent(userId)}`)
+export async function getWrapped(userId: string, year?: number | null): Promise<WrappedData> {
+  const qs = year != null ? `?year=${year}` : ''
+  const res = await fetch(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
   if (!res.ok) throw new Error('Could not load your Wrapped')
   return res.json()
 }

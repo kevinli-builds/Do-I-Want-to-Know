@@ -4,7 +4,11 @@ import { computeStats } from '../lib/stats'
 
 const router = Router()
 
-// GET /wrapped/:userId
+// GET /wrapped/:userId          → all-time stats
+// GET /wrapped/:userId?year=2025 → stats scoped to that calendar year
+//
+// `availableYears` is always computed from the FULL ledger so the year toggle
+// shows every year regardless of the current filter. Pure DB read — no Claude.
 router.get('/:userId', async (req, res) => {
   const { userId } = req.params
 
@@ -24,15 +28,25 @@ router.get('/:userId', async (req, res) => {
       connected: !!user.oauthToken,
       email: user.email,
       totalEntries: 0,
+      year: null,
+      availableYears: [],
       stats: null,
     })
   }
 
+  const availableYears = [...new Set(entries.map(e => e.date.getFullYear()))].sort((a, b) => b - a)
+
+  const yearParam = Number(req.query.year)
+  const year = Number.isInteger(yearParam) && availableYears.includes(yearParam) ? yearParam : null
+  const scoped = year !== null ? entries.filter(e => e.date.getFullYear() === year) : entries
+
   res.json({
     connected: true,
     email: user.email,
-    totalEntries: entries.length,
-    stats: computeStats(entries),
+    totalEntries: scoped.length,
+    year,
+    availableYears,
+    stats: computeStats(scoped),
   })
 })
 

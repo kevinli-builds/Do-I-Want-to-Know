@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { syncEmails, downloadExcel, type WrappedData } from '../lib/api'
+import { SpendChart } from './SpendChart'
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -40,11 +41,17 @@ export function WrappedView({
   userId,
   data,
   cachedAt,
+  selectedYear,
+  onSelectYear,
+  yearLoading = false,
   onRefresh,
 }: {
   userId: string
   data: WrappedData
   cachedAt?: number | null
+  selectedYear: number | null
+  onSelectYear: (year: number | null) => void
+  yearLoading?: boolean
   onRefresh: () => Promise<void>
 }) {
   const [syncing, setSyncing] = useState(false)
@@ -101,6 +108,28 @@ export function WrappedView({
 
       {notice && <div className={`notice${notice.error ? ' error' : ''}`}>{notice.text}</div>}
 
+      {(data.availableYears?.length ?? 0) > 1 && (
+        <div className="year-toggle">
+          <button
+            className={`year-btn${selectedYear === null ? ' active' : ''}`}
+            onClick={() => onSelectYear(null)}
+            disabled={yearLoading}
+          >
+            All time
+          </button>
+          {data.availableYears.map((y) => (
+            <button
+              key={y}
+              className={`year-btn${selectedYear === y ? ' active' : ''}`}
+              onClick={() => onSelectYear(y)}
+              disabled={yearLoading}
+            >
+              {y}
+            </button>
+          ))}
+        </div>
+      )}
+
       {!stats ? (
         <div className="card">
           <div className="empty">
@@ -113,10 +142,13 @@ export function WrappedView({
         <>
           {/* ── Hero: Total Spend ───────────────────────────────────── */}
           <div className="card hero">
-            <h2>Total Spend</h2>
+            <h2>Total Spend{selectedYear ? ` · ${selectedYear}` : ''}</h2>
             <div className="big">{money(stats.totalSpend)}</div>
             <div className="sub">across {data.totalEntries} tracked emails</div>
           </div>
+
+          {/* ── Spend Over Time chart ──────────────────────────────── */}
+          <SpendChart monthlySpend={stats.monthlySpend} year={selectedYear} />
 
           {/* ── Stats Grid ─────────────────────────────────────────── */}
           <div className="grid">

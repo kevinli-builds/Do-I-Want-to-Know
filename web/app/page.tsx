@@ -13,19 +13,38 @@ export default function Home() {
   const [wrapped,   setWrapped]   = useState<WrappedData | null>(null)
   const [cachedAt,  setCachedAt]  = useState<number | null>(null)
   const [loading,   setLoading]   = useState(true)
+  const [selectedYear, setSelectedYear] = useState<number | null>(null)
+  const [yearLoading,  setYearLoading]  = useState(false)
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
   const slowStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Fetch fresh data from the backend and update both state + local cache.
-  const loadWrapped = useCallback(async (id: string) => {
-    const data = await getWrapped(id)
+  // Only the all-time view (year === null) is cached, so the instant-load
+  // dashboard always reflects the full picture.
+  const loadWrapped = useCallback(async (id: string, year: number | null = null) => {
+    const data = await getWrapped(id, year)
     setWrapped(data)
     setConnected(data.connected)
-    saveWrappedCache(id, data)
-    setCachedAt(Date.now())
+    if (year === null) {
+      saveWrappedCache(id, data)
+      setCachedAt(Date.now())
+    }
   }, [])
+
+  // Year toggle — re-fetch scoped stats (pure DB read, no Claude cost).
+  const handleSelectYear = useCallback(async (year: number | null) => {
+    setSelectedYear(year)
+    setYearLoading(true)
+    try {
+      await loadWrapped(userId, year)
+    } catch {
+      /* keep showing whatever we have */
+    } finally {
+      setYearLoading(false)
+    }
+  }, [userId, loadWrapped])
 
   useEffect(() => {
     async function init() {
@@ -113,7 +132,10 @@ export default function Home() {
         userId={userId}
         data={wrapped}
         cachedAt={cachedAt}
-        onRefresh={() => loadWrapped(userId)}
+        selectedYear={selectedYear}
+        onSelectYear={handleSelectYear}
+        yearLoading={yearLoading}
+        onRefresh={() => loadWrapped(userId, selectedYear)}
       />
     )
   }

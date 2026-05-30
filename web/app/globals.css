@@ -258,3 +258,79 @@ body {
   padding: 36px 12px;
   line-height: 1.6;
 }
+
+/* ── Year toggle ────────────────────────────────────────────── */
+.year-toggle {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.year-btn {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--ink);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+.year-btn:hover:not(:disabled) {
+  border-color: var(--purple);
+}
+.year-btn.active {
+  background: var(--purple);
+  border-color: var(--purple);
+  color: #fff;
+}
+.year-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+/* ── Bar chart ──────────────────────────────────────────────── */
+.chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  height: 150px;
+  margin-top: 4px;
+}
+.chart-col {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+}
+.chart-track {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+.chart-fill {
+  width: 70%;
+  max-width: 34px;
+  background: #d9d6ff;
+  border-radius: 6px 6px 0 0;
+  transition: height 0.3s ease;
+}
+.chart-fill.peak {
+  background: var(--purple);
+}
+.chart-label {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.chart-caption {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--muted);
+  text-align: center;
+}
