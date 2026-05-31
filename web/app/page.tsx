@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, type WrappedData } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, ReauthError, type WrappedData } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
@@ -19,6 +19,11 @@ export default function Home() {
   const [selectedYear, setSelectedYear] = useState<number | null>(null)
   const [yearLoading,  setYearLoading]  = useState(false)
   const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'unsubscribe'>('wrapped')
+  // Global sync state (the floating button works on every tab)
+  const [syncing, setSyncing] = useState(false)
+  const [syncNotice, setSyncNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
+  // Bumped after a sync so the data-fetching tabs (Monitor/Audit/Unsubscribe) reload
+  const [refreshKey, setRefreshKey] = useState(0)
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
@@ -49,6 +54,28 @@ export default function Home() {
       setYearLoading(false)
     }
   }, [userId, loadWrapped])
+
+  // Global sync — triggered by the floating button on any tab.
+  const handleSync = useCallback(async () => {
+    if (!userId) return
+    setSyncing(true)
+    setSyncNotice(null)
+    try {
+      const result = await syncEmails(userId)
+      setSyncNotice({
+        text: result.synced > 0
+          ? `Synced ${result.synced} new email${result.synced === 1 ? '' : 's'}.`
+          : (result.message ?? "You're already up to date."),
+      })
+      setRefreshKey(k => k + 1)              // reload Monitor/Audit/Unsubscribe
+      await loadWrapped(userId, selectedYear) // reload Wrapped
+    } catch (e) {
+      if (e instanceof ReauthError) setSyncNotice({ text: e.message, error: true, reauth: true })
+      else setSyncNotice({ text: e instanceof Error ? e.message : 'Sync failed', error: true })
+    } finally {
+      setSyncing(false)
+    }
+  }, [userId, selectedYear, loadWrapped])
 
   useEffect(() => {
     async function init() {
@@ -167,16 +194,31 @@ export default function Home() {
             selectedYear={selectedYear}
             onSelectYear={handleSelectYear}
             yearLoading={yearLoading}
-            onRefresh={() => loadWrapped(userId, selectedYear)}
             onOpenUnsubscribe={() => setView('unsubscribe')}
           />
         ) : view === 'monitor' ? (
-          <MonitorView userId={userId} />
+          <MonitorView userId={userId} refreshKey={refreshKey} />
         ) : view === 'audit' ? (
-          <TransactionsView userId={userId} />
+          <TransactionsView userId={userId} refreshKey={refreshKey} />
         ) : (
-          <UnsubscribeView userId={userId} />
+          <UnsubscribeView userId={userId} refreshKey={refreshKey} />
         )}
+
+        {/* Floating sync — available on every tab */}
+        <div className="fab-wrap no-print">
+          {syncNotice && (
+            <div className={`fab-toast${syncNotice.error ? ' error' : ''}`}>
+              <span>{syncNotice.text}</span>
+              {syncNotice.reauth && (
+                <button className="link-btn" onClick={() => startConnect(userId)}>Connect</button>
+              )}
+              <button className="fab-toast-x" onClick={() => setSyncNotice(null)} aria-label="Dismiss">×</button>
+            </div>
+          )}
+          <button className="fab" onClick={handleSync} disabled={syncing}>
+            {syncing ? '⏳ Syncing…' : '🔄 Sync Emails'}
+          </button>
+        </div>
       </>
     )
   }

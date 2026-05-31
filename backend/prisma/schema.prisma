@@ -46,6 +46,15 @@ model LedgerEntry {
 }
 
 // Someone who isn't a test user yet asking to be added (Testing-mode access).
+model Acceptance {
+  id        String   @id @default(cuid())
+  userId    String   // canonical user id
+  vendor    String   // vendor/sender the user has marked "Accepted"
+  createdAt DateTime @default(now())
+
+  @@unique([userId, vendor])
+}
+
 model AccessRequest {
   id        String   @id @default(cuid())
   email     String   @unique

@@ -79,9 +79,11 @@ export interface KpiPair {
   prev: number
   deltaPct: number | null
 }
-export interface TrendPoint {
-  label: string
-  value: number
+export interface MonitorAnalytics {
+  months: string[]
+  categories: string[]
+  countByCategory: Record<string, number[]>
+  spendByCategory: Record<string, number[]>
 }
 export interface MonitorFlag {
   kind: 'up' | 'down' | 'new' | 'info'
@@ -101,8 +103,7 @@ export interface MonitorData {
     promoEmails: KpiPair
     donations: KpiPair
   }
-  spendTrend?: TrendPoint[]
-  promoTrend?: TrendPoint[]
+  analytics?: MonitorAnalytics
   subscriptions?: {
     monthlyBurn: number
     activeCount: number
@@ -144,6 +145,25 @@ export async function getTransactions(userId: string): Promise<Transaction[]> {
 /** Deep link to the exact Gmail message a record was extracted from. */
 export function gmailMessageUrl(emailId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${emailId}`
+}
+
+// ── Accepted tags (cross-device) ───────────────────────────────────────────
+export async function getAcceptances(userId: string): Promise<string[]> {
+  const res = await fetchWithTimeout(`${API}/acceptances/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Could not load accepted tags')
+  const data = await res.json()
+  return data.vendors ?? []
+}
+
+export async function setAcceptance(userId: string, vendor: string, accepted: boolean): Promise<string[]> {
+  const res = await fetchWithTimeout(`${API}/acceptances/${encodeURIComponent(userId)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vendor, accepted }),
+  })
+  if (!res.ok) throw new Error('Could not update accepted tag')
+  const data = await res.json()
+  return data.vendors ?? []
 }
 
 export async function upsertUser(id: string): Promise<UserStatus> {

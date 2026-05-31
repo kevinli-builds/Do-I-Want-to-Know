@@ -1,7 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { getMonitor, type MonitorData, type KpiPair, type TrendPoint } from '../lib/api'
+import { getMonitor, type MonitorData, type KpiPair } from '../lib/api'
+import { AnalyticsChart } from './AnalyticsChart'
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
@@ -36,28 +37,7 @@ function Kpi({ label, pair, kind }: { label: string; pair: KpiPair; kind: 'money
   )
 }
 
-function MiniBars({ points, kind }: { points: TrendPoint[]; kind: 'money' | 'count' }) {
-  const max = Math.max(...points.map(p => p.value), 0)
-  if (max <= 0) return <p className="chart-caption">No data in this window yet.</p>
-  const fmt = kind === 'money' ? moneyFull : (n: number) => `${n}`
-  return (
-    <div className="chart">
-      {points.map((p, i) => {
-        const pct = (p.value / max) * 100
-        return (
-          <div className="chart-col" key={i} title={`${p.label}: ${fmt(p.value)}`}>
-            <div className="chart-track">
-              {p.value > 0 && <div className="chart-fill" style={{ height: `${Math.max(pct, 2)}%` }} />}
-            </div>
-            <div className="chart-label">{p.label}</div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-export function MonitorView({ userId }: { userId: string }) {
+export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
   const [period, setPeriod] = useState<'month' | 'year'>('month')
   const [data, setData] = useState<MonitorData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -75,7 +55,7 @@ export function MonitorView({ userId }: { userId: string }) {
     }
   }, [userId])
 
-  useEffect(() => { load(period) }, [load, period])
+  useEffect(() => { load(period) }, [load, period, refreshKey])
 
   if (loading) {
     return (
@@ -159,15 +139,8 @@ export function MonitorView({ userId }: { userId: string }) {
         <Kpi label="Donations" pair={k.donations} kind="money" />
       </div>
 
-      {/* Trends */}
-      <div className="card">
-        <h2>📈 Spend — last 12 months</h2>
-        <MiniBars points={data.spendTrend ?? []} kind="money" />
-      </div>
-      <div className="card">
-        <h2>📬 Promotional email — last 12 months</h2>
-        <MiniBars points={data.promoTrend ?? []} kind="count" />
-      </div>
+      {/* Analytics — configurable line chart */}
+      {data.analytics && <AnalyticsChart data={data.analytics} />}
 
       {/* Subscription monitor */}
       <div className="card">

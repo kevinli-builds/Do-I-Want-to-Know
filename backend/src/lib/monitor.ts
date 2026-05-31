@@ -13,14 +13,18 @@ export interface KpiPair {
   deltaPct: number | null // null when prev is 0 (can't compute %)
 }
 
-export interface TrendPoint {
-  label: string
-  value: number
-}
-
 export interface MonitorFlag {
   kind: 'up' | 'down' | 'new' | 'info'
   text: string
+}
+
+// 12-month time-series, split by category, so the UI can chart a single
+// aggregate line or break it out per category, for either metric.
+export interface MonitorAnalytics {
+  months: string[] // 12 short month labels, oldest → newest
+  categories: string[] // categories present in the window
+  countByCategory: Record<string, number[]> // category → 12 monthly counts
+  spendByCategory: Record<string, number[]> // category → 12 monthly spend totals
 }
 
 export interface MonitorData {
@@ -34,8 +38,7 @@ export interface MonitorData {
     promoEmails: KpiPair
     donations: KpiPair
   }
-  spendTrend: TrendPoint[]
-  promoTrend: TrendPoint[]
+  analytics: MonitorAnalytics
   subscriptions: {
     monthlyBurn: number
     activeCount: number
@@ -87,6 +90,39 @@ function kpiTotals(entries: LedgerEntry[]) {
 
 const pair = (cur: number, prev: number): KpiPair => ({ value: cur, prev, deltaPct: deltaPct(cur, prev) })
 
+// Build a 12-month, per-category time series for both count and spend.
+export function computeAnalytics(entries: LedgerEntry[], now = new Date()): MonitorAnalytics {
+  const monthsD: Date[] = []
+  for (let i = 11; i >= 0; i--) monthsD.push(new Date(now.getFullYear(), now.getMonth() - i, 1))
+  const idxByKey: Record<string, number> = {}
+  monthsD.forEach((d, i) => { idxByKey[monthKey(d)] = i })
+
+  const countByCategory: Record<string, number[]> = {}
+  const spendByCategory: Record<string, number[]> = {}
+  const cats = new Set<string>()
+  for (const e of entries) {
+    const idx = idxByKey[monthKey(e.date)]
+    if (idx === undefined) continue // outside the 12-month window
+    cats.add(e.category)
+    if (!countByCategory[e.category]) {
+      countByCategory[e.category] = Array(12).fill(0)
+      spendByCategory[e.category] = Array(12).fill(0)
+    }
+    countByCategory[e.category][idx] += 1
+    spendByCategory[e.category][idx] += e.amount ?? 0
+  }
+  for (const c of Object.keys(spendByCategory)) {
+    spendByCategory[c] = spendByCategory[c].map(round2)
+  }
+
+  return {
+    months: monthsD.map(d => d.toLocaleString('en-US', { month: 'short' })),
+    categories: [...cats].sort(),
+    countByCategory,
+    spendByCategory,
+  }
+}
+
 export function computeMonitor(entries: LedgerEntry[], period: Period, now = new Date()): MonitorData {
   const curBase = periodBase(period, now, 'cur')
   const prevBase = periodBase(period, now, 'prev')
@@ -95,22 +131,6 @@ export function computeMonitor(entries: LedgerEntry[], period: Period, now = new
 
   const cur = kpiTotals(curEntries)
   const prev = kpiTotals(prevEntries)
-
-  // ── Trends: last 12 months ────────────────────────────────────────────────
-  const months: Date[] = []
-  for (let i = 11; i >= 0; i--) months.push(new Date(now.getFullYear(), now.getMonth() - i, 1))
-  const spendByMonth: Record<string, number> = {}
-  const promoByMonth: Record<string, number> = {}
-  for (const e of entries) {
-    const k = monthKey(e.date)
-    if (isSpend(e)) spendByMonth[k] = (spendByMonth[k] ?? 0) + (e.amount ?? 0)
-    if (e.category === 'marketing') promoByMonth[k] = (promoByMonth[k] ?? 0) + 1
-  }
-  const trend = (src: Record<string, number>): TrendPoint[] =>
-    months.map(d => ({
-      label: d.toLocaleString('en-US', { month: 'short' }),
-      value: round2(src[monthKey(d)] ?? 0),
-    }))
 
   // ── Subscription monitor ──────────────────────────────────────────────────
   const stats = computeStats(entries)
@@ -189,8 +209,7 @@ export function computeMonitor(entries: LedgerEntry[], period: Period, now = new
       promoEmails: pair(cur.promoEmails, prev.promoEmails),
       donations: pair(cur.donations, prev.donations),
     },
-    spendTrend: trend(spendByMonth),
-    promoTrend: trend(promoByMonth),
+    analytics: computeAnalytics(entries, now),
     subscriptions: {
       monthlyBurn: stats.monthlySubscriptionCost,
       activeCount: activeInsights.length,

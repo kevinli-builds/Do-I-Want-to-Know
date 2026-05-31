@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getTransactions, gmailMessageUrl, type Transaction } from '../lib/api'
+import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
@@ -17,12 +17,14 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function TransactionsView({ userId }: { userId: string }) {
+export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
   const [error, setError] = useState(false)
   const [search, setSearch] = useState('')
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<'recent' | 'amount'>('recent')
+  const [hideAccepted, setHideAccepted] = useState(false)
+  const [accepted, setAccepted] = useState<Set<string>>(new Set())
 
   const load = useCallback(async () => {
     setError(false)
@@ -34,7 +36,21 @@ export function TransactionsView({ userId }: { userId: string }) {
     }
   }, [userId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshKey])
+  useEffect(() => {
+    getAcceptances(userId).then(v => setAccepted(new Set(v))).catch(() => {})
+  }, [userId, refreshKey])
+
+  async function toggleAccept(vendor: string) {
+    const was = accepted.has(vendor)
+    setAccepted(prev => { const n = new Set(prev); was ? n.delete(vendor) : n.add(vendor); return n })
+    try {
+      const vendors = await setAcceptance(userId, vendor, !was)
+      setAccepted(new Set(vendors))
+    } catch {
+      setAccepted(prev => { const n = new Set(prev); was ? n.add(vendor) : n.delete(vendor); return n }) // revert
+    }
+  }
 
   const categories = useMemo(
     () => (all ? [...new Set(all.map(t => t.category))].sort() : []),
@@ -46,6 +62,7 @@ export function TransactionsView({ userId }: { userId: string }) {
     const q = search.trim().toLowerCase()
     let list = all.filter(t => {
       if (category !== 'all' && t.category !== category) return false
+      if (hideAccepted && accepted.has(t.vendor)) return false
       if (!q) return true
       return t.vendor.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
     })
@@ -55,7 +72,7 @@ export function TransactionsView({ userId }: { userId: string }) {
         : new Date(b.date).getTime() - new Date(a.date).getTime()
     )
     return list
-  }, [all, search, category, sort])
+  }, [all, search, category, sort, hideAccepted, accepted])
 
   if (error) {
     return (
@@ -114,6 +131,10 @@ export function TransactionsView({ userId }: { userId: string }) {
               <option value="recent">Most recent</option>
               <option value="amount">Highest amount</option>
             </select>
+            <label className="unsub-toggle">
+              <input type="checkbox" checked={hideAccepted} onChange={e => setHideAccepted(e.target.checked)} />
+              Hide accepted
+            </label>
           </div>
 
           <div className="card" style={{ padding: 8 }}>
@@ -136,14 +157,23 @@ export function TransactionsView({ userId }: { userId: string }) {
                   )}
                   <div className="txn-meta">
                     <span>{fmtDate(t.date)} · {t.category}</span>
-                    <a
-                      className="txn-link"
-                      href={gmailMessageUrl(t.emailId)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      View email ↗
-                    </a>
+                    <span className="txn-meta-actions">
+                      <button
+                        className={`accept-btn${accepted.has(t.vendor) ? ' on' : ''}`}
+                        onClick={() => toggleAccept(t.vendor)}
+                        title="Mark this vendor as Accepted"
+                      >
+                        {accepted.has(t.vendor) ? '✓ Accepted' : 'Accept'}
+                      </button>
+                      <a
+                        className="txn-link"
+                        href={gmailMessageUrl(t.emailId)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        View email ↗
+                      </a>
+                    </span>
                   </div>
                 </div>
               ))

@@ -9,6 +9,7 @@ import { exportRouter } from './routes/export'
 import { accessRouter } from './routes/access'
 import { monitorRouter } from './routes/monitor'
 import { transactionsRouter } from './routes/transactions'
+import { acceptancesRouter } from './routes/acceptances'
 
 // Safety net: never let a stray async error terminate the whole server (Node
 // crashes the process on unhandled rejections by default, which on Render means
@@ -32,6 +33,7 @@ app.use('/export', exportRouter)
 app.use('/access', accessRouter)
 app.use('/monitor', monitorRouter)
 app.use('/transactions', transactionsRouter)
+app.use('/acceptances', acceptancesRouter)
 
 app.get('/health', (_req, res) => res.json({ ok: true }))
 

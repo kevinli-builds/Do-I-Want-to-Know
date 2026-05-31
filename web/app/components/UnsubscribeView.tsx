@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getTransactions, type Transaction } from '../lib/api'
+import { getTransactions, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
 
 interface Sender {
   vendor: string
@@ -31,14 +31,18 @@ function persistDone(userId: string, set: Set<string>) {
   }
 }
 
-export function UnsubscribeView({ userId }: { userId: string }) {
+export function UnsubscribeView({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
   const [error, setError] = useState(false)
   const [search, setSearch] = useState('')
   const [hideDone, setHideDone] = useState(false)
   const [done, setDone] = useState<Set<string>>(new Set())
+  const [accepted, setAccepted] = useState<Set<string>>(new Set())
 
   useEffect(() => { setDone(loadDone(userId)) }, [userId])
+  useEffect(() => {
+    getAcceptances(userId).then(v => setAccepted(new Set(v))).catch(() => {})
+  }, [userId, refreshKey])
 
   const load = useCallback(async () => {
     setError(false)
@@ -50,7 +54,18 @@ export function UnsubscribeView({ userId }: { userId: string }) {
     }
   }, [userId])
 
-  useEffect(() => { load() }, [load])
+  useEffect(() => { load() }, [load, refreshKey])
+
+  async function toggleAccept(vendor: string) {
+    const was = accepted.has(vendor)
+    setAccepted(prev => { const n = new Set(prev); was ? n.delete(vendor) : n.add(vendor); return n })
+    try {
+      const vendors = await setAcceptance(userId, vendor, !was)
+      setAccepted(new Set(vendors))
+    } catch {
+      setAccepted(prev => { const n = new Set(prev); was ? n.add(vendor) : n.delete(vendor); return n })
+    }
+  }
 
   const senders = useMemo<Sender[]>(() => {
     if (!all) return []
@@ -219,6 +234,13 @@ export function UnsubscribeView({ userId }: { userId: string }) {
                       {!s.unsubscribe && !s.senderEmail && (
                         <span className="sender-email">No unsubscribe link captured</span>
                       )}
+                      <button
+                        className={`accept-btn${accepted.has(s.vendor) ? ' on' : ''}`}
+                        onClick={() => toggleAccept(s.vendor)}
+                        title="I'm OK with this sender — remember across devices"
+                      >
+                        {accepted.has(s.vendor) ? '✓ Accepted' : 'Accept'}
+                      </button>
                       <button className="link-btn ghost done-btn" onClick={() => toggleDone(s.vendor)}>
                         {isDone ? '✓ Handled' : 'Mark handled'}
                       </button>

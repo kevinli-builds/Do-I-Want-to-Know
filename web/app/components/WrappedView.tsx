@@ -1,7 +1,6 @@
 'use client'
 
-import { useState } from 'react'
-import { syncEmails, downloadExcel, startConnect, gmailMessageUrl, ReauthError, type WrappedData } from '../lib/api'
+import { downloadExcel, gmailMessageUrl, type WrappedData } from '../lib/api'
 import { SpendChart } from './SpendChart'
 
 const money = (n: number) =>
@@ -50,7 +49,6 @@ export function WrappedView({
   selectedYear,
   onSelectYear,
   yearLoading = false,
-  onRefresh,
   onOpenUnsubscribe,
 }: {
   userId: string
@@ -59,35 +57,8 @@ export function WrappedView({
   selectedYear: number | null
   onSelectYear: (year: number | null) => void
   yearLoading?: boolean
-  onRefresh: () => Promise<void>
   onOpenUnsubscribe?: () => void
 }) {
-  const [syncing, setSyncing] = useState(false)
-  const [notice, setNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
-
-  async function handleSync() {
-    setSyncing(true)
-    setNotice(null)
-    try {
-      const result = await syncEmails(userId)
-      setNotice({
-        text:
-          result.synced > 0
-            ? `Synced ${result.synced} new email${result.synced === 1 ? '' : 's'}.`
-            : (result.message ?? "You're already up to date."),
-      })
-      await onRefresh()
-    } catch (e) {
-      if (e instanceof ReauthError) {
-        setNotice({ text: e.message, error: true, reauth: true })
-      } else {
-        setNotice({ text: e instanceof Error ? e.message : 'Sync failed', error: true })
-      }
-    } finally {
-      setSyncing(false)
-    }
-  }
-
   const stats = data.stats
 
   // Summary counts for the hero grid
@@ -112,26 +83,8 @@ export function WrappedView({
               ⬇ Export
             </button>
           )}
-          <button className="btn" onClick={handleSync} disabled={syncing}>
-            {syncing ? 'Syncing…' : 'Sync Emails'}
-          </button>
         </div>
       </div>
-
-      {notice && (
-        <div className={`notice${notice.error ? ' error' : ''}`}>
-          {notice.text}
-          {notice.reauth && (
-            <button
-              className="link-btn"
-              style={{ marginLeft: 12, border: 'none', cursor: 'pointer' }}
-              onClick={() => startConnect(userId)}
-            >
-              Connect Gmail
-            </button>
-          )}
-        </div>
-      )}
 
       {(data.availableYears?.length ?? 0) > 1 && (
         <div className="year-toggle">

@@ -169,6 +169,14 @@ model AccessRequest {              // invite requests from non-test-users
   note      String?
   createdAt DateTime @default(now())
 }
+
+model Acceptance {                 // vendors/senders the user marked "Accepted" (cross-device)
+  id        String   @id @default(cuid())
+  userId    String
+  vendor    String
+  createdAt DateTime @default(now())
+  @@unique([userId, vendor])
+}
 ```
 
 ---
@@ -185,6 +193,8 @@ model AccessRequest {              // invite requests from non-test-users
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, trends, subscription/inbox monitors, auto-flags |
 | GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId`, for the Audit view + Gmail deep links |
+| GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
+| POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |
 | GET | `/access/requests?key=` | Owner-only list of access requests (requires `ADMIN_KEY`) |
 | GET | `/health` | `{ok: true}` |
