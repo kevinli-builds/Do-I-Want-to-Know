@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { fetchEmailsForUser, isAuthError } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
@@ -30,7 +31,7 @@ function safeDate(...candidates: (string | undefined)[]): Date {
 
 // POST /emails/sync  { userId }
 // Fetches new emails, runs Claude extraction, stores LedgerEntries
-router.post('/sync', async (req, res) => {
+router.post('/sync', asyncHandler(async (req, res) => {
   const { userId } = req.body
   if (!userId) return void res.status(400).json({ error: 'userId required' })
 
@@ -117,6 +118,6 @@ router.post('/sync', async (req, res) => {
     console.error('[emails/sync] failed:', err)
     return void res.status(500).json({ error: 'Sync failed — please try again in a bit.' })
   }
-})
+}))
 
 export { router as emailsRouter }

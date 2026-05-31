@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getTransactions, gmailMessageUrl, type Transaction } from '../lib/api'
 
 const money = (n: number) =>
@@ -24,13 +24,17 @@ export function TransactionsView({ userId }: { userId: string }) {
   const [category, setCategory] = useState('all')
   const [sort, setSort] = useState<'recent' | 'amount'>('recent')
 
-  useEffect(() => {
-    let cancelled = false
-    getTransactions(userId)
-      .then(t => { if (!cancelled) setAll(t) })
-      .catch(() => { if (!cancelled) setError(true) })
-    return () => { cancelled = true }
+  const load = useCallback(async () => {
+    setError(false)
+    setAll(null)
+    try {
+      setAll(await getTransactions(userId))
+    } catch {
+      setError(true)
+    }
   }, [userId])
+
+  useEffect(() => { load() }, [load])
 
   const categories = useMemo(
     () => (all ? [...new Set(all.map(t => t.category))].sort() : []),
@@ -56,7 +60,14 @@ export function TransactionsView({ userId }: { userId: string }) {
   if (error) {
     return (
       <div className="shell">
-        <div className="card"><div className="empty">Could not load your records. Try again shortly.</div></div>
+        <div className="card">
+          <div className="empty">
+            Couldn’t load your records — the server may be waking up.
+            <div style={{ marginTop: 14 }}>
+              <button className="btn" onClick={() => load()}>Try again</button>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

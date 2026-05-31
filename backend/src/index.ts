@@ -103,5 +103,14 @@ app.get('/privacy', (_req, res) => {
 </html>`)
 })
 
+// Central error handler — guarantees every failed request gets a response
+// (an unhandled rejection in a route would otherwise leave the client hanging).
+// Must be registered last and take 4 args for Express to treat it as an error handler.
+app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  console.error('[error]', err)
+  if (res.headersSent) return // response already streaming (e.g. export) — can't change it
+  res.status(500).json({ error: 'Something went wrong — please try again.' })
+})
+
 const PORT = process.env.PORT ?? 3000
 app.listen(PORT, () => console.log(`DIWTKN backend running on http://localhost:${PORT}`))

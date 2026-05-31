@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
@@ -9,7 +10,7 @@ const router = Router()
 //
 // `availableYears` is always computed from the FULL ledger so the year toggle
 // shows every year regardless of the current filter. Pure DB read — no Claude.
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
   const user = await prisma.user.findUnique({
@@ -48,6 +49,6 @@ router.get('/:userId', async (req, res) => {
     availableYears,
     stats: computeStats(scoped),
   })
-})
+}))
 
 export { router as wrappedRouter }

@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeMonitor, type Period } from '../lib/monitor'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
 // GET /monitor/:userId?period=month|year
 // Period-over-period monitoring deck. Pure DB read — no Claude cost.
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
   const user = await prisma.user.findUnique({
@@ -32,6 +33,6 @@ router.get('/:userId', async (req, res) => {
     empty: false,
     ...computeMonitor(entries, period),
   })
-})
+}))
 
 export { router as monitorRouter }

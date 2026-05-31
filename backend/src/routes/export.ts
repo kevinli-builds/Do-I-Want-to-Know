@@ -3,6 +3,7 @@ import ExcelJS from 'exceljs'
 import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
 import { CATEGORY_LABELS } from '../lib/categories'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
@@ -10,7 +11,6 @@ const router = Router()
 const PURPLE  = 'FF6C63FF'
 const WHITE   = 'FFFFFFFF'
 const LIGHT   = 'FFF3F2FF'
-const MUTED   = 'FF888899'
 
 function headerStyle(color = PURPLE): Partial<ExcelJS.Style> {
   return {
@@ -36,7 +36,7 @@ function altRow(isAlt: boolean): Partial<ExcelJS.Style> {
 //   1. Transactions  – every purchase / subscription / travel / food etc.
 //   2. Marketing     – every promotional email with sender + date
 //   3. Summary       – key stats (total spend, top vendors, charities, etc.)
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -270,6 +270,6 @@ router.get('/:userId', async (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="${filename}"`)
   await wb.xlsx.write(res)
   res.end()
-})
+}))
 
 export { router as exportRouter }

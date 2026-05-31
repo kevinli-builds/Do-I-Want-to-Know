@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
 // GET /transactions/:userId
 // Returns every extracted record (newest first) so the user can audit any view
 // and click through to the source Gmail message. Pure DB read — no Claude cost.
-router.get('/:userId', async (req, res) => {
+router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
   const user = await prisma.user.findUnique({ where: { id: userId } })
@@ -32,6 +33,6 @@ router.get('/:userId', async (req, res) => {
       termMonths: e.termMonths,
     })),
   })
-})
+}))
 
 export { router as transactionsRouter }

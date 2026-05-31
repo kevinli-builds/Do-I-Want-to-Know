@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
+import { asyncHandler } from '../lib/asyncHandler'
 
 const router = Router()
 
@@ -31,7 +32,7 @@ async function notifyOwner(email: string, note?: string | null): Promise<void> {
 
 // POST /access/request  { email, note? }
 // Records a request to be added as a test user and pings the owner.
-router.post('/request', async (req, res) => {
+router.post('/request', asyncHandler(async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase()
   const note = req.body?.note ? String(req.body.note).slice(0, 200) : null
   if (!EMAIL_RE.test(email)) {
@@ -46,15 +47,15 @@ router.post('/request', async (req, res) => {
   }
 
   res.json({ ok: true })
-})
+}))
 
 // GET /access/requests?key=<ADMIN_KEY>
 // Owner-only list of pending requests (fallback if no webhook is configured).
-router.get('/requests', async (req, res) => {
+router.get('/requests', asyncHandler(async (req, res) => {
   const key = process.env.ADMIN_KEY
   if (!key || req.query.key !== key) return void res.status(403).json({ error: 'Forbidden' })
   const requests = await prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } })
   res.json({ requests })
-})
+}))
 
 export { router as accessRouter }

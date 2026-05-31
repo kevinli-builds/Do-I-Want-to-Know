@@ -90,7 +90,14 @@ export function MonitorView({ userId }: { userId: string }) {
   if (error || !data) {
     return (
       <div className="shell">
-        <div className="card"><div className="empty">Could not load the monitor. Try again shortly.</div></div>
+        <div className="card">
+          <div className="empty">
+            Couldn’t load the monitor — the server may be waking up.
+            <div style={{ marginTop: 14 }}>
+              <button className="btn" onClick={() => load(period)}>Try again</button>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }

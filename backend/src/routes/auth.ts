@@ -91,6 +91,7 @@ router.get('/google/callback', async (req, res) => {
 
   const { userId: requestedId, redirect } = decodeState(state)
 
+  try {
   const oauth2Client = getOAuthClient()
   const { tokens } = await oauth2Client.getToken(code)
   oauth2Client.setCredentials(tokens)
@@ -154,6 +155,39 @@ router.get('/google/callback', async (req, res) => {
   </div>
 </body>
 </html>`)
+  } catch (err) {
+    // OAuth exchange / userinfo / DB failure — show a friendly page with a way
+    // back, rather than a blank screen or raw stack trace.
+    console.error('[auth/callback] failed:', err)
+    const back = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
+    res.status(500).send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connection failed</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #f7f7ff;
+           display: flex; align-items: center; justify-content: center;
+           min-height: 100vh; margin: 0; }
+    .card { text-align: center; padding: 48px 32px; max-width: 420px; }
+    .x { font-size: 56px; line-height: 1; }
+    h1 { color: #1a1a2e; margin: 16px 0 8px; font-size: 24px; }
+    p { color: #666; font-size: 16px; line-height: 1.5; }
+    a { display: inline-block; margin-top: 18px; background: #6c63ff; color: #fff;
+        text-decoration: none; padding: 12px 22px; border-radius: 12px; font-weight: 700; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="x">⚠️</div>
+    <h1>Couldn't connect Gmail</h1>
+    <p>Something went wrong during sign-in. This is usually temporary — please try again.</p>
+    ${back ? `<a href="${back}">Back to the app</a>` : ''}
+  </div>
+</body>
+</html>`)
+  }
 })
 
 export { router as authRouter }

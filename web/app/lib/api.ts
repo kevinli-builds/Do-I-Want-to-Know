@@ -3,6 +3,19 @@
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
+// fetch with an abort timeout so a stalled request rejects instead of hanging
+// the UI forever. Generous default (60s) to tolerate Render free-tier cold
+// starts (~30-50s). NOT used for /emails/sync, which legitimately runs longer.
+async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 60000): Promise<Response> {
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), ms)
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal })
+  } finally {
+    clearTimeout(timer)
+  }
+}
+
 export interface UserStatus {
   id: string
   email: string | null
@@ -101,7 +114,7 @@ export interface MonitorData {
 }
 
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
-  const res = await fetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
+  const res = await fetchWithTimeout(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
   if (!res.ok) throw new Error('Could not load the monitor')
   return res.json()
 }
@@ -122,7 +135,7 @@ export interface Transaction {
 }
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {
-  const res = await fetch(`${API}/transactions/${encodeURIComponent(userId)}`)
+  const res = await fetchWithTimeout(`${API}/transactions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load transactions')
   const data = await res.json()
   return data.transactions ?? []
@@ -134,7 +147,7 @@ export function gmailMessageUrl(emailId: string): string {
 }
 
 export async function upsertUser(id: string): Promise<UserStatus> {
-  const res = await fetch(`${API}/users`, {
+  const res = await fetchWithTimeout(`${API}/users`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ id }),
@@ -164,7 +177,7 @@ export function startConnect(userId: string): void {
 
 export async function getWrapped(userId: string, year?: number | null): Promise<WrappedData> {
   const qs = year != null ? `?year=${year}` : ''
-  const res = await fetch(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
+  const res = await fetchWithTimeout(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
   if (!res.ok) throw new Error('Could not load your Wrapped')
   return res.json()
 }

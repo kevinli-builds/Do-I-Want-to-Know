@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getTransactions, type Transaction } from '../lib/api'
 
 interface Sender {
@@ -39,13 +39,18 @@ export function UnsubscribeView({ userId }: { userId: string }) {
   const [done, setDone] = useState<Set<string>>(new Set())
 
   useEffect(() => { setDone(loadDone(userId)) }, [userId])
-  useEffect(() => {
-    let cancelled = false
-    getTransactions(userId)
-      .then(t => { if (!cancelled) setAll(t) })
-      .catch(() => { if (!cancelled) setError(true) })
-    return () => { cancelled = true }
+
+  const load = useCallback(async () => {
+    setError(false)
+    setAll(null)
+    try {
+      setAll(await getTransactions(userId))
+    } catch {
+      setError(true)
+    }
   }, [userId])
+
+  useEffect(() => { load() }, [load])
 
   const senders = useMemo<Sender[]>(() => {
     if (!all) return []
@@ -106,7 +111,14 @@ export function UnsubscribeView({ userId }: { userId: string }) {
   if (error) {
     return (
       <div className="shell">
-        <div className="card"><div className="empty">Could not load your senders. Try again shortly.</div></div>
+        <div className="card">
+          <div className="empty">
+            Couldn’t load your senders — the server may be waking up.
+            <div style={{ marginTop: 14 }}>
+              <button className="btn" onClick={() => load()}>Try again</button>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
