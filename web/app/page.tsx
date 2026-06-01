@@ -247,6 +247,8 @@ export default function Home() {
                   <option value={1}>1 year</option>
                   <option value={2}>2 years</option>
                   <option value={3}>3 years</option>
+                  <option value={4}>4 years</option>
+                  <option value={5}>5 years</option>
                 </select>
               </label>
               <label>
@@ -257,6 +259,8 @@ export default function Home() {
                   <option value={500}>500 emails</option>
                   <option value={1000}>1,000 emails</option>
                   <option value={2000}>2,000 emails</option>
+                  <option value={5000}>5,000 emails</option>
+                  <option value={10000}>10,000 emails</option>
                 </select>
               </label>
               <p className="sync-opts-hint">Bigger syncs take longer; if one stops early, just sync again — it picks up where it left off.</p>

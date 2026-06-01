@@ -117,8 +117,8 @@ export async function listEmailIds(
   userId: string,
   opts?: { lookbackDays?: number; maxEmails?: number }
 ): Promise<string[]> {
-  const lookbackDays = clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650)
-  const maxEmails = clamp(Math.round(opts?.maxEmails ?? MAX_EMAILS), 10, 2000)
+  const lookbackDays = clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650) // up to ~10 years
+  const maxEmails = clamp(Math.round(opts?.maxEmails ?? MAX_EMAILS), 10, 10000)
 
   const gmail = await authedGmail(userId)
   const after = Math.floor((Date.now() - lookbackDays * 24 * 60 * 60 * 1000) / 1000)
