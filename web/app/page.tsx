@@ -264,6 +264,9 @@ export default function Home() {
                 </select>
               </label>
               <p className="sync-opts-hint">Bigger syncs take longer; if one stops early, just sync again — it picks up where it left off.</p>
+              {syncMax >= 5000 && (
+                <p className="sync-opts-hint warn">⚠️ Large syncs run across several passes — they won’t all land in one go. Keep syncing and the “back to” date marches earlier.</p>
+              )}
             </div>
           )}
 

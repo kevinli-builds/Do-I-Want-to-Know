@@ -796,6 +796,13 @@ body {
   cursor: pointer;
 }
 .sync-opts-hint { font-size: 11px; color: var(--muted); line-height: 1.4; margin: 0; }
+.sync-opts-hint.warn {
+  color: #92400e;
+  background: #fff8e6;
+  border: 1px solid #fcd34d;
+  border-radius: 8px;
+  padding: 7px 10px;
+}
 
 /* ── Line chart ─────────────────────────────────────────────── */
 .linechart-wrap { margin-top: 4px; }
