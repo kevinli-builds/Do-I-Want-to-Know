@@ -49,11 +49,14 @@ router.post('/request', asyncHandler(async (req, res) => {
   res.json({ ok: true })
 }))
 
-// GET /access/requests?key=<ADMIN_KEY>
+// GET /access/requests   (header: X-Admin-Key: <ADMIN_KEY>)
 // Owner-only list of pending requests (fallback if no webhook is configured).
+// The key goes in a header, not the query string, so it doesn't end up in
+// access logs, browser history, or referrers.
 router.get('/requests', asyncHandler(async (req, res) => {
   const key = process.env.ADMIN_KEY
-  if (!key || req.query.key !== key) return void res.status(403).json({ error: 'Forbidden' })
+  const provided = req.header('x-admin-key')
+  if (!key || provided !== key) return void res.status(403).json({ error: 'Forbidden' })
   const requests = await prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } })
   res.json({ requests })
 }))

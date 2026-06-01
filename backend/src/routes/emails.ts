@@ -3,8 +3,11 @@ import { prisma } from '../lib/prisma'
 import { listNewEmailIds, fetchMetadataForIds, gmailErrorKind } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 import { asyncHandler } from '../lib/asyncHandler'
+import { logError } from '../lib/log'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // Each sync hits Gmail + the Claude API, so cap how often a single user can run one.
 // Configurable via env; defaults to once every 24 hours.
@@ -142,7 +145,7 @@ router.post('/sync', asyncHandler(async (req, res) => {
         reauth: true,
       })
     }
-    console.error('[emails/sync] failed:', err)
+    logError('[emails/sync] failed:', err)
     return void res.status(500).json({ error: 'Sync failed — please try again in a bit.' })
   }
 }))

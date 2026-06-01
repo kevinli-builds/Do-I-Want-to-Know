@@ -63,7 +63,8 @@ Do I Want To Know/
 │   │       ├── 20260527000000_gmail_wrapped/  Drops survey tables, adds email/OAuth/ledger
 │   │       ├── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
 │   │       ├── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
-│   │       └── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
+│   │       ├── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
+│       └── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -179,7 +180,31 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
   createdAt DateTime @default(now())
   @@unique([userId, vendor])
 }
+
+model Session {                    // bearer session granted after OAuth — only the token HASH is stored
+  id        String   @id @default(cuid())
+  userId    String
+  tokenHash String   @unique       // sha256(token); raw token lives only in the client + Authorization header
+  createdAt DateTime @default(now())
+}
+
+model LoginCode {                  // single-use, short-lived handoff code (OAuth redirect → /auth/exchange)
+  code      String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
 ```
+
+---
+
+## Authentication / authorization
+- **Data endpoints require a bearer session token** (`Authorization: Bearer <token>`), enforced by `requireSession` (`lib/session.ts`): `/wrapped`, `/monitor`, `/transactions`, `/export`, `/acceptances`, `/emails/sync`. The **token** (not the userId) is the credential; if a route also carries a userId it must match the session's user.
+- A token is minted **only after Gmail OAuth proves ownership**. The callback can't safely put a token in the redirect URL (URLs leak via history/referrer/logs), so it issues a **one-time `LoginCode`**; the frontend trades it via `POST /auth/exchange` for `{userId, token}` and stores the token in `localStorage`.
+- Only the **sha256 hash** of a token is stored (`Session.tokenHash`) — a DB leak can't be replayed.
+- `POST /users` is the unauthenticated bootstrap: it returns full status **only** when a valid token is presented; otherwise it always answers `connected:false` (a guessed userId alone reveals nothing).
+- On a 401 `{reauth:true}` the web client drops the dead token and shows Connect.
+- **CORS is locked** to `FRONTEND_URL` (+ localhost), not `*`. The admin list uses an `X-Admin-Key` **header** (not a query param). Errors log via `lib/log.ts` (error name + truncated message only — never full objects / PII).
 
 ---
 
@@ -187,9 +212,10 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/users` | Upsert user by device UUID, returns `{id, email, connected, lastSyncedAt, entryCount, oldestDate}` |
+| POST | `/users` | Bootstrap/status. With a valid `Authorization: Bearer` token → `{id, email, connected, lastSyncedAt, entryCount, oldestDate, caughtUp}`; without one → always `connected:false` (reveals nothing) |
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
-| GET | `/auth/google/callback` | OAuth callback — stores tokens, then redirects to `<redirect>/?connected=1` (web) or shows a "close tab" page (mobile) |
+| GET | `/auth/google/callback` | OAuth callback — stores Gmail tokens, mints a one-time `LoginCode`, redirects to `<redirect>/?connected=1&code=<code>` (web) or shows a "close tab" page (mobile) |
+| POST | `/auth/exchange` | `{code}` → trades the one-time handoff code for `{userId, token}` (the durable session token). Code is single-use + expires in 10 min |
 | POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
 | GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
@@ -198,7 +224,7 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
 | POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |
-| GET | `/access/requests?key=` | Owner-only list of access requests (requires `ADMIN_KEY`) |
+| GET | `/access/requests` | Owner-only list of access requests — send the `ADMIN_KEY` in an `X-Admin-Key` header |
 | GET | `/health` | `{ok: true}` |
 | GET | `/privacy` | HTML privacy policy page |
 
@@ -213,7 +239,7 @@ GOOGLE_CLIENT_ID=...                 # Google Cloud Console OAuth 2.0 client
 GOOGLE_CLIENT_SECRET=...
 ANTHROPIC_API_KEY=sk-ant-...
 BASE_URL=https://your-render-url     # Used to build the OAuth callback URL
-FRONTEND_URL=https://your-vercel-url # Web app origin — callback redirects here after connect
+FRONTEND_URL=https://your-vercel-url # Web app origin — callback redirects here AND gates CORS (must EXACTLY match the Vercel origin, no trailing slash)
 SYNC_RATE_LIMIT_HOURS=24             # Optional, per-user min hours between /emails/sync (default 24, 0 disables)
 SYNC_LOOKBACK_DAYS=1095              # Optional, how far back to scan Gmail (default 1095 = 3 years)
 SYNC_MAX_EMAILS=2000                 # Optional, max emails ingested per sync (default 2000)

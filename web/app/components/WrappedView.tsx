@@ -79,7 +79,7 @@ export function WrappedView({
         </div>
         <div style={{ display: 'flex', gap: 10 }}>
           {data.totalEntries > 0 && (
-            <button className="btn btn-outline" onClick={() => downloadExcel(userId)}>
+            <button className="btn btn-outline" onClick={() => { downloadExcel(userId).catch(() => {}) }}>
               ⬇ Export
             </button>
           )}

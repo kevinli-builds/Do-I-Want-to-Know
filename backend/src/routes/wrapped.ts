@@ -2,8 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
 import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // GET /wrapped/:userId          → all-time stats
 // GET /wrapped/:userId?year=2025 → stats scoped to that calendar year

@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // GET /transactions/:userId
 // Returns every extracted record (newest first) so the user can audit any view

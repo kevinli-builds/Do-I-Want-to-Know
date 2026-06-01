@@ -1,8 +1,10 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // GET /acceptances/:userId → { vendors: string[] }
 // The set of vendors/senders this user has marked "Accepted".

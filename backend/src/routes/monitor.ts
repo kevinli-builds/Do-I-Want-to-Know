@@ -2,8 +2,10 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeMonitor, type Period } from '../lib/monitor'
 import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // GET /monitor/:userId?period=month|year
 // Period-over-period monitoring deck. Pure DB read — no Claude cost.

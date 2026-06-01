@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import { logError } from './lib/log'
 import { usersRouter } from './routes/users'
 import { authRouter } from './routes/auth'
 import { emailsRouter } from './routes/emails'
@@ -15,14 +16,32 @@ import { acceptancesRouter } from './routes/acceptances'
 // crashes the process on unhandled rejections by default, which on Render means
 // a restart that takes every in-flight request down). Log and stay up instead.
 process.on('unhandledRejection', reason => {
-  console.error('[unhandledRejection]', reason)
+  logError('[unhandledRejection]', reason)
 })
 process.on('uncaughtException', err => {
-  console.error('[uncaughtException]', err)
+  logError('[uncaughtException]', err)
 })
 
 const app = express()
-app.use(cors())
+
+// CORS: only allow the known web frontend (and localhost for dev) to call the
+// API from a browser, and only the headers we actually use. A wide-open `*`
+// let any site script the API on a visitor's behalf.
+const ALLOWED_ORIGINS = [
+  process.env.FRONTEND_URL,
+  'http://localhost:3000',
+  'http://localhost:8081',
+].filter(Boolean) as string[]
+
+app.use(cors({
+  origin(origin, cb) {
+    // Allow non-browser clients / same-origin requests (no Origin header) and
+    // any explicitly allow-listed frontend origin.
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true)
+    cb(null, false)
+  },
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}))
 app.use(express.json())
 
 app.use('/users', usersRouter)
@@ -109,7 +128,7 @@ app.get('/privacy', (_req, res) => {
 // (an unhandled rejection in a route would otherwise leave the client hanging).
 // Must be registered last and take 4 args for Express to treat it as an error handler.
 app.use((err: unknown, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('[error]', err)
+  logError('[error]', err)
   if (res.headersSent) return // response already streaming (e.g. export) — can't change it
   res.status(500).json({ error: 'Something went wrong — please try again.' })
 })

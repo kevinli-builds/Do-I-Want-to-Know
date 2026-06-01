@@ -14,6 +14,29 @@ model User {
   lastSyncedAt DateTime?                  // last successful /emails/sync — used for rate limiting
   oauthToken   OAuthToken?
   ledger       LedgerEntry[]
+  sessions     Session[]
+}
+
+// A bearer session granted after the user proves Gmail ownership via OAuth.
+// Only the SHA-256 hash of the token is stored, so a DB leak can't be replayed.
+// The raw token lives in the client's localStorage and is sent as
+// `Authorization: Bearer <token>` — it's the credential, NOT the user id.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String   @unique
+  createdAt DateTime @default(now())
+}
+
+// Short-lived, single-use handoff code. The OAuth callback can't safely put a
+// long-lived token in the redirect URL (URLs leak via history/referrer/logs),
+// so it issues a one-time code; the frontend exchanges it for a real session.
+model LoginCode {
+  code      String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
 }
 
 model OAuthToken {

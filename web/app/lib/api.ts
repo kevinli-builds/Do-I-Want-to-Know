@@ -1,7 +1,29 @@
-// Thin client over the Render backend. All calls are unauthenticated except for
-// the device UUID, which identifies the anonymous user.
+// Thin client over the Render backend. Data calls are authenticated with a
+// bearer session token (obtained after Gmail OAuth, see exchangeCode). The token
+// — not the user id — is the credential, and it travels in the Authorization
+// header, never in the URL.
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
+
+const TOKEN_KEY = 'diwtkn_token'
+
+export function getToken(): string | null {
+  if (typeof window === 'undefined') return null
+  try { return window.localStorage.getItem(TOKEN_KEY) } catch { return null }
+}
+export function setToken(token: string): void {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.setItem(TOKEN_KEY, token) } catch { /* ignore */ }
+}
+export function clearToken(): void {
+  if (typeof window === 'undefined') return
+  try { window.localStorage.removeItem(TOKEN_KEY) } catch { /* ignore */ }
+}
+
+function authHeaders(extra: Record<string, string> = {}): Record<string, string> {
+  const t = getToken()
+  return t ? { ...extra, Authorization: `Bearer ${t}` } : extra
+}
 
 // fetch with an abort timeout so a stalled request rejects instead of hanging
 // the UI forever. Generous default (60s) to tolerate Render free-tier cold
@@ -14,6 +36,22 @@ async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 60000)
   } finally {
     clearTimeout(timer)
   }
+}
+
+// Authenticated fetch: attaches the bearer token and turns a 401 reauth response
+// into a ReauthError (after dropping the dead token) so the UI can prompt a
+// reconnect instead of silently showing an error.
+async function authedFetch(url: string, opts: RequestInit = {}, ms = 60000): Promise<Response> {
+  const headers = { ...(opts.headers as Record<string, string> | undefined ?? {}), ...authHeaders() }
+  const res = await fetchWithTimeout(url, { ...opts, headers }, ms)
+  if (res.status === 401) {
+    const data = await res.clone().json().catch(() => ({} as { reauth?: boolean; error?: string }))
+    if (data?.reauth) {
+      clearToken()
+      throw new ReauthError(data.error ?? 'Please reconnect Gmail.')
+    }
+  }
+  return res
 }
 
 export interface UserStatus {
@@ -127,7 +165,7 @@ export interface MonitorData {
 }
 
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
-  const res = await fetchWithTimeout(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
+  const res = await authedFetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
   if (!res.ok) throw new Error('Could not load the monitor')
   return res.json()
 }
@@ -148,7 +186,7 @@ export interface Transaction {
 }
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {
-  const res = await fetchWithTimeout(`${API}/transactions/${encodeURIComponent(userId)}`)
+  const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load transactions')
   const data = await res.json()
   return data.transactions ?? []
@@ -161,14 +199,14 @@ export function gmailMessageUrl(emailId: string): string {
 
 // ── Accepted tags (cross-device) ───────────────────────────────────────────
 export async function getAcceptances(userId: string): Promise<string[]> {
-  const res = await fetchWithTimeout(`${API}/acceptances/${encodeURIComponent(userId)}`)
+  const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load accepted tags')
   const data = await res.json()
   return data.vendors ?? []
 }
 
 export async function setAcceptance(userId: string, vendor: string, accepted: boolean): Promise<string[]> {
-  const res = await fetchWithTimeout(`${API}/acceptances/${encodeURIComponent(userId)}`, {
+  const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ vendor, accepted }),
@@ -179,13 +217,31 @@ export async function setAcceptance(userId: string, vendor: string, accepted: bo
 }
 
 export async function upsertUser(id: string): Promise<UserStatus> {
+  // Sends the bearer token if we have one (so a connected device gets its real
+  // status); without it the server safely reports connected:false.
   const res = await fetchWithTimeout(`${API}/users`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ id }),
   })
   if (!res.ok) throw new Error('Could not reach the server')
   return res.json()
+}
+
+// Trade the one-time code from the OAuth redirect for a durable session token
+// and the canonical user id. Persists the token on success.
+export async function exchangeCode(code: string): Promise<{ userId: string; token: string }> {
+  const res = await fetch(`${API}/auth/exchange`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ code }),
+  })
+  const data = await res.json().catch(() => ({} as { userId?: string; token?: string; error?: string }))
+  if (!res.ok || !data.token || !data.userId) {
+    throw new Error(data.error ?? 'Could not complete sign-in')
+  }
+  setToken(data.token)
+  return { userId: data.userId, token: data.token }
 }
 
 // Ask the owner to be added as a test user (for people not yet on the list).
@@ -209,32 +265,44 @@ export function startConnect(userId: string): void {
 
 export async function getWrapped(userId: string, year?: number | null): Promise<WrappedData> {
   const qs = year != null ? `?year=${year}` : ''
-  const res = await fetchWithTimeout(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
+  const res = await authedFetch(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
   if (!res.ok) throw new Error('Could not load your Wrapped')
   return res.json()
 }
 
-/** Triggers a direct file download of the user's data as an Excel workbook. */
-export function downloadExcel(userId: string): void {
+/**
+ * Downloads the user's data as an Excel workbook. The export endpoint now needs
+ * the bearer token, which a plain <a href> navigation can't send — so we fetch
+ * the file as a blob (with the auth header) and trigger the download from it.
+ */
+export async function downloadExcel(userId: string): Promise<void> {
+  const res = await authedFetch(`${API}/export/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Could not export your data')
+  const blob = await res.blob()
+  const cd = res.headers.get('Content-Disposition') ?? ''
+  const match = cd.match(/filename="?([^"]+)"?/)
+  const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
-  a.href = `${API}/export/${encodeURIComponent(userId)}`
-  a.download = ''          // let the server Content-Disposition set the filename
+  a.href = url
+  a.download = match?.[1] ?? 'do-i-want-to-know.xlsx'
   a.style.display = 'none'
   document.body.appendChild(a)
   a.click()
   document.body.removeChild(a)
+  URL.revokeObjectURL(url)
 }
 
 export async function syncEmails(userId: string, opts: SyncOptions = {}): Promise<SyncResult> {
   const res = await fetch(`${API}/emails/sync`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders({ 'Content-Type': 'application/json' }),
     body: JSON.stringify({ userId, ...opts }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    // Expired token OR missing Gmail scope — caller should prompt a reconnect
+    // Expired session, expired Gmail token, OR missing Gmail scope — reconnect.
     if (data.reauth) {
+      if (res.status === 401) clearToken()
       throw new ReauthError(data.error ?? 'Please reconnect Gmail.')
     }
     // Surface the backend's friendly message (e.g. rate-limit notice)

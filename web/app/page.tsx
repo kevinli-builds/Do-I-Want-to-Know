@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, syncEmails, startConnect, ReauthError, type WrappedData } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, ReauthError, type WrappedData } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
@@ -108,16 +108,26 @@ export default function Home() {
     async function init() {
       let id = getUserId()
 
-      // Returning from the OAuth flow: adopt the canonical user id the backend
-      // resolved from the Gmail address, so this device converges onto the same
-      // identity (and data) as any other device that connected this Gmail.
+      // Returning from the OAuth flow: trade the one-time code for a session
+      // token + the canonical user id (keyed by the Gmail address), so this
+      // device converges onto the same identity/data as any other device that
+      // connected this Gmail — and is authenticated for it.
       if (typeof window !== 'undefined' && window.location.search.includes('connected=1')) {
-        const uid = new URLSearchParams(window.location.search).get('uid')
-        if (uid && uid !== id) {
-          persistUserId(uid)
-          id = uid
-        }
+        const code = new URLSearchParams(window.location.search).get('code')
+        // Strip the code from the URL immediately so it never lingers in history.
         window.history.replaceState({}, '', window.location.pathname)
+        if (code) {
+          try {
+            const { userId: canonicalId } = await exchangeCode(code)
+            if (canonicalId && canonicalId !== id) {
+              persistUserId(canonicalId)
+              id = canonicalId
+            }
+          } catch {
+            // Code expired or already used — fall through to the normal status
+            // check; the user will land on Connect and can reconnect.
+          }
+        }
       }
 
       setUserId(id)

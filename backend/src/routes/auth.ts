@@ -3,8 +3,14 @@ import { randomUUID } from 'node:crypto'
 import { google } from 'googleapis'
 import { getOAuthClient } from '../lib/gmail'
 import { prisma } from '../lib/prisma'
+import { logError } from '../lib/log'
+import { newToken, createSession } from '../lib/session'
 
 const router = Router()
+
+// One-time handoff codes expire quickly — they only need to survive the redirect
+// back to the frontend and the immediate exchange call.
+const LOGIN_CODE_TTL_MS = 10 * 60 * 1000
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -139,11 +145,17 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
     },
   })
 
-  // Web flow: redirect back to the frontend with the canonical id so the device
-  // adopts it (and thereby sees this Gmail's data on every device).
+  // Web flow: issue a single-use handoff code and redirect back with THAT — not
+  // the durable user id or token. The frontend exchanges it (POST /auth/exchange)
+  // for a session token + its canonical id. Keeping secrets out of the URL means
+  // nothing reusable leaks via browser history, referrers, or access logs.
   const target = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
   if (target) {
-    return void res.redirect(`${target}/?connected=1&uid=${encodeURIComponent(canonicalId)}`)
+    const code = newToken()
+    await prisma.loginCode.create({
+      data: { code, userId: canonicalId, expiresAt: new Date(Date.now() + LOGIN_CODE_TTL_MS) },
+    })
+    return void res.redirect(`${target}/?connected=1&code=${encodeURIComponent(code)}`)
   }
 
   // Fallback (mobile / no frontend configured): show a "close this tab" page
@@ -174,7 +186,7 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
   } catch (err) {
     // OAuth exchange / userinfo / DB failure — show a friendly page with a way
     // back, rather than a blank screen or raw stack trace.
-    console.error('[auth/callback] failed:', err)
+    logError('[auth/callback] failed:', err)
     const e = err as { response?: { data?: { error?: string } }; message?: string }
     // invalid_grant = the one-time auth code expired or was already used (a
     // refresh / back-button / double-load). Guide a fresh sign-in.
@@ -216,6 +228,25 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
 </body>
 </html>`)
   }
+})
+
+// POST /auth/exchange  { code }
+// Trade a one-time handoff code (from the OAuth redirect) for a durable session
+// token. The code is single-use and short-lived; we delete it immediately.
+router.post('/exchange', async (req, res) => {
+  const code = String(req.body?.code ?? '').trim()
+  if (!code) return void res.status(400).json({ error: 'code required' })
+
+  const row = await prisma.loginCode.findUnique({ where: { code } })
+  if (!row || row.expiresAt.getTime() < Date.now()) {
+    if (row) await prisma.loginCode.delete({ where: { code } }).catch(() => {})
+    return void res.status(400).json({ error: 'This sign-in link expired. Please connect Gmail again.' })
+  }
+
+  // Burn the code first so a replay can't mint a second session.
+  await prisma.loginCode.delete({ where: { code } }).catch(() => {})
+  const token = await createSession(row.userId)
+  res.json({ userId: row.userId, token })
 })
 
 export { router as authRouter }

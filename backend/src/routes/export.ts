@@ -4,8 +4,10 @@ import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
 import { CATEGORY_LABELS } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession } from '../lib/session'
 
 const router = Router()
+router.use(requireSession)
 
 // Purple theme matching the app's brand colour
 const PURPLE  = 'FF6C63FF'
