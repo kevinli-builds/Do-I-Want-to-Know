@@ -175,8 +175,20 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
     // OAuth exchange / userinfo / DB failure — show a friendly page with a way
     // back, rather than a blank screen or raw stack trace.
     console.error('[auth/callback] failed:', err)
+    const e = err as { response?: { data?: { error?: string } }; message?: string }
+    // invalid_grant = the one-time auth code expired or was already used (a
+    // refresh / back-button / double-load). Guide a fresh sign-in.
+    const expiredCode = /invalid_grant/i.test(String(e?.response?.data?.error ?? e?.message ?? ''))
     const back = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
-    res.status(500).send(`<!DOCTYPE html>
+    // A relative link back to the OAuth start re-initiates a clean sign-in.
+    const retry = `/auth/google?userId=${encodeURIComponent(requestedId)}${back ? `&redirect=${encodeURIComponent(back)}` : ''}`
+    const heading = expiredCode ? 'This sign-in link expired' : "Couldn't connect Gmail"
+    const body = expiredCode
+      ? 'Sign-in links work only once and expire after a few minutes — a page refresh or the back button can use them up. Start a fresh sign-in below.'
+      : 'Something went wrong during sign-in. This is usually temporary — please try again.'
+    const linkHref = expiredCode ? retry : (back ?? retry)
+    const linkText = expiredCode ? 'Connect Gmail again' : 'Back to the app'
+    res.status(expiredCode ? 400 : 500).send(`<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -196,10 +208,10 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
 </head>
 <body>
   <div class="card">
-    <div class="x">⚠️</div>
-    <h1>Couldn't connect Gmail</h1>
-    <p>Something went wrong during sign-in. This is usually temporary — please try again.</p>
-    ${back ? `<a href="${back}">Back to the app</a>` : ''}
+    <div class="x">${expiredCode ? '⏳' : '⚠️'}</div>
+    <h1>${heading}</h1>
+    <p>${body}</p>
+    <a href="${linkHref}">${linkText}</a>
   </div>
 </body>
 </html>`)
