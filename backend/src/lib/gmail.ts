@@ -1,5 +1,11 @@
-import { google } from 'googleapis'
+import { google, gmail_v1 } from 'googleapis'
 import { prisma } from './prisma'
+
+// How far back to look, and the max emails to ingest per sync. Configurable via
+// env so the window/volume can be tuned without a code change.
+const LOOKBACK_DAYS = Number(process.env.SYNC_LOOKBACK_DAYS ?? 1095) // ~3 years
+const MAX_EMAILS = Number(process.env.SYNC_MAX_EMAILS ?? 2000)
+const FETCH_CONCURRENCY = 25 // metadata gets per batch — paces us under Gmail's per-user rate limit
 
 export function getOAuthClient() {
   return new google.auth.OAuth2(
@@ -53,7 +59,8 @@ export function parseUnsubscribe(header: string): string | null {
   return mail ?? null
 }
 
-export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
+// Build an authed Gmail client and persist refreshed access tokens.
+async function authedGmail(userId: string): Promise<gmail_v1.Gmail> {
   const token = await prisma.oAuthToken.findUnique({ where: { userId } })
   if (!token) throw new Error('No OAuth token for user')
 
@@ -63,8 +70,6 @@ export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
     refresh_token: token.refreshToken,
     expiry_date: token.expiresAt.getTime(),
   })
-
-  // Persist refreshed access tokens automatically
   oauth2Client.on('tokens', async (tokens) => {
     if (tokens.access_token) {
       await prisma.oAuthToken.update({
@@ -73,85 +78,98 @@ export async function fetchEmailsForUser(userId: string): Promise<RawEmail[]> {
           accessToken: tokens.access_token,
           expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
         },
-      })
+      }).catch(() => {/* token row may have been replaced; ignore */})
     }
   })
+  return google.gmail({ version: 'v1', auth: oauth2Client })
+}
 
-  const gmail = google.gmail({ version: 'v1', auth: oauth2Client })
-  const oneYearAgo = Math.floor((Date.now() - 365 * 24 * 60 * 60 * 1000) / 1000)
+// List message IDs matching a query, paginating up to `cap`.
+async function listIds(gmail: gmail_v1.Gmail, q: string, cap: number): Promise<string[]> {
+  const ids: string[] = []
+  let pageToken: string | undefined
+  while (ids.length < cap) {
+    const res = await gmail.users.messages.list({
+      userId: 'me',
+      q,
+      maxResults: Math.min(500, cap - ids.length),
+      pageToken,
+    })
+    for (const m of res.data.messages ?? []) if (m.id) ids.push(m.id)
+    pageToken = res.data.nextPageToken ?? undefined
+    if (!pageToken) break
+  }
+  return ids
+}
 
-  // Run three searches in parallel then merge + deduplicate:
-  //   1. Purchase/receipt emails (order confirmations, invoices, subscriptions, etc.)
-  //   2. Promotional / marketing emails (Gmail's Promotions category tab)
-  //   3. Charity / donation emails
-  const [purchaseRes, promoRes, charityRes] = await Promise.all([
-    gmail.users.messages.list({
-      userId: 'me',
-      maxResults: 200,
-      q: [
-        `after:${oneYearAgo}`,
-        '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
-        'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
-      ].join(' '),
-    }),
-    gmail.users.messages.list({
-      userId: 'me',
-      maxResults: 300,
-      q: `after:${oneYearAgo} category:promotions`,
-    }),
-    gmail.users.messages.list({
-      userId: 'me',
-      maxResults: 100,
-      q: [
-        `after:${oneYearAgo}`,
-        '(subject:donation OR subject:donate OR subject:"your donation"',
-        'OR subject:"your gift" OR subject:"thank you for your gift"',
-        'OR subject:"tax receipt" OR subject:"tax deductible" OR subject:"charitable")',
-      ].join(' '),
-    }),
+// Step 1 — list candidate message IDs across the three categories we care about,
+// over the lookback window, merged + deduped, capped at MAX_EMAILS.
+// (IDs only, so the caller can skip already-processed emails before fetching.)
+export async function listEmailIds(userId: string): Promise<string[]> {
+  const gmail = await authedGmail(userId)
+  const after = Math.floor((Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000)
+
+  const [purchase, promo, charity] = await Promise.all([
+    listIds(gmail, [
+      `after:${after}`,
+      '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
+      'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
+    ].join(' '), MAX_EMAILS),
+    listIds(gmail, `after:${after} category:promotions`, MAX_EMAILS),
+    listIds(gmail, [
+      `after:${after}`,
+      '(subject:donation OR subject:donate OR subject:"your donation"',
+      'OR subject:"your gift" OR subject:"thank you for your gift"',
+      'OR subject:"tax receipt" OR subject:"tax deductible" OR subject:"charitable")',
+    ].join(' '), MAX_EMAILS),
   ])
 
-  // Merge all message IDs, deduplicating by id
   const seen = new Set<string>()
-  const allIds: string[] = []
-  for (const msg of [
-    ...(purchaseRes.data.messages ?? []),
-    ...(promoRes.data.messages ?? []),
-    ...(charityRes.data.messages ?? []),
-  ]) {
-    if (msg.id && !seen.has(msg.id)) {
-      seen.add(msg.id)
-      allIds.push(msg.id)
+  const merged: string[] = []
+  for (const id of [...purchase, ...promo, ...charity]) {
+    if (!seen.has(id)) {
+      seen.add(id)
+      merged.push(id)
+      if (merged.length >= MAX_EMAILS) break
     }
   }
+  return merged
+}
 
-  if (allIds.length === 0) return []
+// Step 2 — fetch metadata for the given message IDs, in throttled batches to
+// stay under Gmail's per-user rate limit.
+export async function fetchMetadataForIds(userId: string, ids: string[]): Promise<RawEmail[]> {
+  if (ids.length === 0) return []
+  const gmail = await authedGmail(userId)
+  const out: RawEmail[] = []
 
-  // Fetch metadata for all messages in parallel
-  const fetched = await Promise.all(
-    allIds.map(id =>
-      gmail.users.messages.get({
-        userId: 'me',
-        id,
-        format: 'metadata',
-        metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
-      })
+  for (let i = 0; i < ids.length; i += FETCH_CONCURRENCY) {
+    const chunk = ids.slice(i, i + FETCH_CONCURRENCY)
+    const fetched = await Promise.all(
+      chunk.map(id =>
+        gmail.users.messages.get({
+          userId: 'me',
+          id,
+          format: 'metadata',
+          metadataHeaders: ['From', 'Subject', 'Date', 'List-Unsubscribe'],
+        })
+      )
     )
-  )
-
-  return fetched.map(res => {
-    const headers = res.data.payload?.headers ?? []
-    const get = (name: string) =>
-      headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
-    const from = get('From')
-    return {
-      id: res.data.id!,
-      subject: get('Subject'),
-      from,
-      date: get('Date'),
-      snippet: res.data.snippet ?? '',
-      senderEmail: parseSenderEmail(from),
-      unsubscribe: parseUnsubscribe(get('List-Unsubscribe')),
+    for (const res of fetched) {
+      const headers = res.data.payload?.headers ?? []
+      const get = (name: string) =>
+        headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''
+      const from = get('From')
+      out.push({
+        id: res.data.id!,
+        subject: get('Subject'),
+        from,
+        date: get('Date'),
+        snippet: res.data.snippet ?? '',
+        senderEmail: parseSenderEmail(from),
+        unsubscribe: parseUnsubscribe(get('List-Unsubscribe')),
+      })
     }
-  })
+  }
+  return out
 }

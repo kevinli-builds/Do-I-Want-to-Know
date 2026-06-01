@@ -34,7 +34,9 @@ export async function extractEntries(
     const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 4096,
-      system: `You classify emails into structured records for an inbox analytics dashboard.
+      // System prompt is identical across batches → mark it cacheable so the
+      // backend reuses it instead of re-billing it on every batch.
+      system: [{ type: 'text', cache_control: { type: 'ephemeral' }, text: `You classify emails into structured records for an inbox analytics dashboard.
 
 Return null ONLY for: personal emails, replies, calendar invites, password resets, login codes, or other emails with no category below.
 
@@ -69,7 +71,7 @@ Key rules:
 
 termMonths rule:
 - Set termMonths ONLY when a single charge clearly covers a fixed multi-month term paid upfront, e.g. "6-month plan" → 6, "annual"/"1-year"/"yearly" → 12, "quarterly"/"3 months" → 3, "biannual"/"2 years" → 24.
-- This lets us show the monthly-equivalent cost. OMIT termMonths for ordinary one-off purchases and normal monthly charges.`,
+- This lets us show the monthly-equivalent cost. OMIT termMonths for ordinary one-off purchases and normal monthly charges.` }],
       messages: [{ role: 'user', content: prompt }],
     })
 

@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { fetchEmailsForUser, isAuthError } from '../lib/gmail'
+import { listEmailIds, fetchMetadataForIds, isAuthError } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -57,23 +57,24 @@ router.post('/sync', asyncHandler(async (req, res) => {
   // unhandled rejection would terminate the Node process and restart the
   // whole server (taking every other request down with it).
   try {
-    const allEmails = await fetchEmailsForUser(userId)
-
-    // Skip emails we have already processed
+    // 1. List candidate message IDs (cheap), then drop ones we've already
+    //    processed BEFORE fetching metadata — so repeat syncs only pull new mail.
+    const ids = await listEmailIds(userId)
     const existing = await prisma.ledgerEntry.findMany({
       where: { userId },
       select: { emailId: true },
     })
     const seen = new Set(existing.map(e => e.emailId))
-    const newEmails = allEmails.filter(e => !seen.has(e.id))
+    const newIds = ids.filter(id => !seen.has(id))
 
-    if (newEmails.length === 0) {
+    if (newIds.length === 0) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
       const total = await prisma.ledgerEntry.count({ where: { userId } })
       return void res.json({ synced: 0, total, message: 'Already up to date' })
     }
 
-    // Claude extracts structured data in batches
+    // 2. Fetch metadata only for the new IDs, then extract with Claude.
+    const newEmails = await fetchMetadataForIds(userId, newIds)
     const extracted = await extractEntries(newEmails)
 
     // Look up raw email metadata (sender / unsubscribe) by id when persisting

@@ -97,9 +97,10 @@ Do I Want To Know/
 7. Browser shows "Connected! Close this tab." page
 8. User closes browser → `onConnected()` called → re-fetches user status → shows **WrappedScreen**
 9. User taps **"Sync Emails"** → `POST /emails/sync`:
-   - Fetches up to 200 email metadata entries from past year (order/receipt/subscription subjects)
-   - Filters out already-processed emailIds (deduplication via `LedgerEntry.emailId`)
-   - Sends new emails to Claude in batches of 25 for extraction
+   - Lists candidate message IDs over the lookback window (default 3 years, up to `SYNC_MAX_EMAILS`=2000) across purchase/promotions/charity queries
+   - Drops already-processed emailIds **before** fetching metadata (so repeat syncs only pull new mail)
+   - Fetches metadata for new IDs in throttled batches (`gmail.ts`: `listEmailIds` + `fetchMetadataForIds`)
+   - Sends new emails to Claude in batches of 25 for extraction (system prompt is cache-marked)
    - Persists structured `LedgerEntry` rows (vendor, category, amount, currency, date)
 10. `GET /wrapped/:userId` aggregates all LedgerEntry rows into stats
 
@@ -213,6 +214,8 @@ ANTHROPIC_API_KEY=sk-ant-...
 BASE_URL=https://your-render-url     # Used to build the OAuth callback URL
 FRONTEND_URL=https://your-vercel-url # Web app origin — callback redirects here after connect
 SYNC_RATE_LIMIT_HOURS=24             # Optional, per-user min hours between /emails/sync (default 24, 0 disables)
+SYNC_LOOKBACK_DAYS=1095              # Optional, how far back to scan Gmail (default 1095 = 3 years)
+SYNC_MAX_EMAILS=2000                 # Optional, max emails ingested per sync (default 2000)
 ACCESS_WEBHOOK_URL=https://...       # Optional, Discord/Slack incoming webhook — pinged on new access requests
 ADMIN_KEY=...                        # Optional, protects GET /access/requests (owner-only list)
 PORT=3000                            # Optional, defaults to 3000
