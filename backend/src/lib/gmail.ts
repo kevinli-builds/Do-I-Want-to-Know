@@ -89,32 +89,46 @@ async function authedGmail(userId: string): Promise<gmail_v1.Gmail> {
   return google.gmail({ version: 'v1', auth: oauth2Client })
 }
 
-// List message IDs matching a query, paginating up to `cap`.
-async function listIds(gmail: gmail_v1.Gmail, q: string, cap: number): Promise<string[]> {
-  const ids: string[] = []
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+// Page a query newest → older, collecting IDs that aren't already in `seen`
+// (already processed) or `collected` (this run), until `out` reaches `need` or
+// the query is exhausted. A scan cap bounds how deep we page.
+async function collectNewIds(
+  gmail: gmail_v1.Gmail,
+  q: string,
+  seen: Set<string>,
+  collected: Set<string>,
+  out: string[],
+  need: number,
+): Promise<void> {
   let pageToken: string | undefined
-  while (ids.length < cap) {
-    const res = await gmail.users.messages.list({
-      userId: 'me',
-      q,
-      maxResults: Math.min(500, cap - ids.length),
-      pageToken,
-    })
-    for (const m of res.data.messages ?? []) if (m.id) ids.push(m.id)
+  let scanned = 0
+  const SCAN_CAP = 8000
+  while (out.length < need && scanned < SCAN_CAP) {
+    const res = await gmail.users.messages.list({ userId: 'me', q, maxResults: 500, pageToken })
+    for (const m of res.data.messages ?? []) {
+      scanned++
+      if (m.id && !seen.has(m.id) && !collected.has(m.id)) {
+        collected.add(m.id)
+        out.push(m.id)
+        if (out.length >= need) break
+      }
+    }
     pageToken = res.data.nextPageToken ?? undefined
     if (!pageToken) break
   }
-  return ids
 }
 
-const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
-
-// Step 1 — list candidate message IDs across the three categories we care about,
-// over the lookback window, merged + deduped, capped at maxEmails.
-// (IDs only, so the caller can skip already-processed emails before fetching.)
-// Per-sync overrides are clamped to safe bounds.
-export async function listEmailIds(
+// Step 1 — list up to `maxEmails` candidate message IDs the user hasn't
+// processed yet, across purchase / promotions / charity queries over the
+// lookback window. Because it skips already-stored IDs (`seen`) and pages
+// newest → older, calling it on successive syncs walks progressively further
+// back through history — so a large backfill happens across repeatable passes,
+// each bounded to `maxEmails`. Per-sync overrides are clamped to safe bounds.
+export async function listNewEmailIds(
   userId: string,
+  seen: Set<string>,
   opts?: { lookbackDays?: number; maxEmails?: number }
 ): Promise<string[]> {
   const lookbackDays = clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650) // up to ~10 years
@@ -123,31 +137,28 @@ export async function listEmailIds(
   const gmail = await authedGmail(userId)
   const after = Math.floor((Date.now() - lookbackDays * 24 * 60 * 60 * 1000) / 1000)
 
-  const [purchase, promo, charity] = await Promise.all([
-    listIds(gmail, [
+  const queries = [
+    [
       `after:${after}`,
       '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
       'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
-    ].join(' '), maxEmails),
-    listIds(gmail, `after:${after} category:promotions`, maxEmails),
-    listIds(gmail, [
+    ].join(' '),
+    `after:${after} category:promotions`,
+    [
       `after:${after}`,
       '(subject:donation OR subject:donate OR subject:"your donation"',
       'OR subject:"your gift" OR subject:"thank you for your gift"',
       'OR subject:"tax receipt" OR subject:"tax deductible" OR subject:"charitable")',
-    ].join(' '), maxEmails),
-  ])
+    ].join(' '),
+  ]
 
-  const seen = new Set<string>()
-  const merged: string[] = []
-  for (const id of [...purchase, ...promo, ...charity]) {
-    if (!seen.has(id)) {
-      seen.add(id)
-      merged.push(id)
-      if (merged.length >= maxEmails) break
-    }
+  const collected = new Set<string>()
+  const out: string[] = []
+  for (const q of queries) {
+    if (out.length >= maxEmails) break
+    await collectNewIds(gmail, q, seen, collected, out, maxEmails)
   }
-  return merged
+  return out
 }
 
 // Step 2 — fetch metadata for the given message IDs, in throttled batches to

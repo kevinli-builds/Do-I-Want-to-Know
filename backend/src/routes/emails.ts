@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { listEmailIds, fetchMetadataForIds, gmailErrorKind } from '../lib/gmail'
+import { listNewEmailIds, fetchMetadataForIds, gmailErrorKind } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -61,21 +61,21 @@ router.post('/sync', asyncHandler(async (req, res) => {
   // unhandled rejection would terminate the Node process and restart the
   // whole server (taking every other request down with it).
   try {
-    // 1. List candidate message IDs (cheap), then drop ones we've already
-    //    processed BEFORE fetching metadata — so repeat syncs only pull new mail.
-    const ids = await listEmailIds(userId, { lookbackDays, maxEmails })
+    // 1. Pull the next batch of UNprocessed candidate IDs (skips already-stored
+    //    ones and pages newest → older), so successive syncs walk further back.
     const existing = await prisma.ledgerEntry.findMany({
       where: { userId },
       select: { emailId: true },
     })
     const seen = new Set(existing.map(e => e.emailId))
-    const newIds = ids.filter(id => !seen.has(id))
+    const wantMax = Math.min(Math.round(maxEmails ?? 2000) || 2000, 10000)
+    const newIds = await listNewEmailIds(userId, seen, { lookbackDays, maxEmails })
 
     if (newIds.length === 0) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
       const total = await prisma.ledgerEntry.count({ where: { userId } })
       const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-      return void res.json({ synced: 0, total, oldestDate: oldest?.date ?? null, message: 'Already up to date' })
+      return void res.json({ synced: 0, total, oldestDate: oldest?.date ?? null, caughtUp: true, message: "You're all caught up" })
     }
 
     // 2. Fetch metadata only for the new IDs, then extract with Claude.
@@ -115,11 +115,19 @@ router.post('/sync', asyncHandler(async (req, res) => {
     if (rows.length > 0) {
       await prisma.ledgerEntry.createMany({ data: rows, skipDuplicates: true })
     }
-    await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
+
+    // "Caught up" when we stored nothing new (incl. all batches skipped) OR
+    // pulled less than a full batch (reached the tail of available mail). Only
+    // then do we start the cooldown — so a productive backfill can continue
+    // back-to-back, while a finished/empty sync is rate-limited normally.
+    const caughtUp = rows.length === 0 || newIds.length < wantMax
+    if (caughtUp) {
+      await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
+    }
 
     const total = await prisma.ledgerEntry.count({ where: { userId } })
     const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-    return void res.json({ synced: rows.length, total, oldestDate: oldest?.date ?? null })
+    return void res.json({ synced: rows.length, total, oldestDate: oldest?.date ?? null, caughtUp })
   } catch (err) {
     const kind = gmailErrorKind(err)
     if (kind === 'expired') {

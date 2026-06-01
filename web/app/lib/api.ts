@@ -23,6 +23,7 @@ export interface UserStatus {
   lastSyncedAt?: string | null
   entryCount?: number
   oldestDate?: string | null
+  caughtUp?: boolean
 }
 
 export interface SubscriptionInsight {
@@ -71,6 +72,7 @@ export interface SyncResult {
   synced: number
   total: number
   oldestDate?: string | null
+  caughtUp?: boolean
   message?: string
 }
 

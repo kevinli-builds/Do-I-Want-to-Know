@@ -35,6 +35,7 @@ export default function Home() {
   const [syncMax, setSyncMax] = useState(500)
   const [showSyncOpts, setShowSyncOpts] = useState(false)
   const [progress, setProgress] = useState<{ count: number; oldest: string | null }>({ count: 0, oldest: null })
+  const [caughtUp, setCaughtUp] = useState(true)
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
@@ -83,10 +84,14 @@ export default function Home() {
     setSyncNotice(null)
     try {
       const result = await syncEmails(userId, { lookbackDays: syncYears * 365, maxEmails: syncMax })
+      const done = result.caughtUp ?? true
+      setCaughtUp(done)
       setSyncNotice({
         text: result.synced > 0
-          ? `Synced ${result.synced} new email${result.synced === 1 ? '' : 's'}.`
-          : (result.message ?? "You're already up to date."),
+          ? (done
+              ? `Synced ${result.synced} new email${result.synced === 1 ? '' : 's'} — all caught up ✓`
+              : `Synced ${result.synced} — tap Sync again to load older mail.`)
+          : (result.message ?? "You're all caught up."),
       })
       setProgress({ count: result.total, oldest: result.oldestDate ?? null })
       setRefreshKey(k => k + 1)              // reload Monitor/Audit/Unsubscribe
@@ -140,6 +145,7 @@ export default function Home() {
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
         setProgress({ count: status.entryCount ?? 0, oldest: status.oldestDate ?? null })
+        setCaughtUp(status.caughtUp ?? true)
 
         if (status.connected) {
           await loadWrapped(id)
@@ -271,8 +277,11 @@ export default function Home() {
           )}
 
           {progress.count > 0 && (
-            <div className="fab-progress">
-              {progress.count.toLocaleString()} emails synced{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
+            <div className={`fab-progress${!caughtUp ? ' more' : ''}`}>
+              {progress.count.toLocaleString()} synced{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
+              <span className="fab-progress-state">
+                {caughtUp ? ' · ✓ up to date' : ' · more to load — keep syncing'}
+              </span>
             </div>
           )}
 

@@ -119,10 +119,11 @@ Do I Want To Know/
 - The callback returns `uid=<canonicalId>`; the web app stores it, so all subsequent calls use the canonical id.
 - **No schema change** was needed — `User.email` was already `@unique`. Viewing/aggregation (`/wrapped`, `/export`) never calls Claude; only `/emails/sync` does.
 
-### Rate limiting
-- `User.lastSyncedAt` is stamped on every successful sync (including "already up to date")
-- `/emails/sync` rejects with 429 if the last sync was within `SYNC_RATE_LIMIT_HOURS` (env, default 24; set `0` to disable)
-- This caps Gmail API + Claude API cost per user — important now that others can try the product with their own Gmail
+### Rate limiting & progressive backfill
+- A sync pulls up to `maxEmails` UNprocessed emails (`listNewEmailIds` skips already-stored ids, pages newest→older), so repeated syncs walk progressively further back through history — a big backfill happens across passes, each bounded to `maxEmails`
+- `User.lastSyncedAt` is stamped **only when a sync is `caughtUp`** (stored 0 new, or pulled less than a full batch). So a productive backfill can run back-to-back; the cooldown only applies once caught up
+- `/emails/sync` rejects with 429 if cooling down within `SYNC_RATE_LIMIT_HOURS` (env, default 24; set `0` to disable). Bounds cost while letting users complete a backfill
+- The floating Sync button surfaces `caughtUp` as "✓ up to date" vs "more to load — keep syncing"
 
 ---
 
@@ -189,7 +190,7 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
 | POST | `/users` | Upsert user by device UUID, returns `{id, email, connected, lastSyncedAt, entryCount, oldestDate}` |
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
 | GET | `/auth/google/callback` | OAuth callback — stores tokens, then redirects to `<redirect>/?connected=1` (web) or shows a "close tab" page (mobile) |
-| POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → fetch+extract new emails, returns `{synced, total, oldestDate}`. Rate-limited (429); 401/403 `{reauth}` on expired token / missing Gmail scope |
+| POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
 | GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, trends, subscription/inbox monitors, auto-flags |
