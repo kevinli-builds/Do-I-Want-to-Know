@@ -15,20 +15,25 @@ export function getOAuthClient() {
   )
 }
 
-// Recognize an expired/revoked OAuth token from a googleapis (Gaxios) error.
-// In Testing mode, Google expires refresh tokens after 7 days, so this is the
-// expected failure that should prompt the user to reconnect Gmail.
-export function isAuthError(err: unknown): boolean {
+// Classify a Gmail/OAuth error so the UI can guide the user precisely:
+//   'expired' → token expired/revoked (testing-mode refresh tokens last 7 days)
+//   'scope'   → user connected but didn't grant Gmail read access
+// Both are fixed by reconnecting, but the message differs.
+export type GmailErrorKind = 'expired' | 'scope'
+export function gmailErrorKind(err: unknown): GmailErrorKind | null {
   const e = err as { response?: { status?: number; data?: { error?: string } }; code?: number | string; message?: string }
   const status = e?.response?.status ?? e?.code
   const code = e?.response?.data?.error
   const msg = String(e?.message ?? '')
-  return (
+  if (
     status === 401 ||
     code === 'invalid_grant' ||
     code === 'unauthorized_client' ||
     /invalid_grant|invalid_token|expired or revoked/i.test(msg)
-  )
+  ) return 'expired'
+  if (/insufficient permission|insufficient authentication scopes|ACCESS_TOKEN_SCOPE_INSUFFICIENT|insufficientPermissions/i.test(msg))
+    return 'scope'
+  return null
 }
 
 export interface RawEmail {
@@ -102,26 +107,35 @@ async function listIds(gmail: gmail_v1.Gmail, q: string, cap: number): Promise<s
   return ids
 }
 
+const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
 // Step 1 — list candidate message IDs across the three categories we care about,
-// over the lookback window, merged + deduped, capped at MAX_EMAILS.
+// over the lookback window, merged + deduped, capped at maxEmails.
 // (IDs only, so the caller can skip already-processed emails before fetching.)
-export async function listEmailIds(userId: string): Promise<string[]> {
+// Per-sync overrides are clamped to safe bounds.
+export async function listEmailIds(
+  userId: string,
+  opts?: { lookbackDays?: number; maxEmails?: number }
+): Promise<string[]> {
+  const lookbackDays = clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650)
+  const maxEmails = clamp(Math.round(opts?.maxEmails ?? MAX_EMAILS), 10, 2000)
+
   const gmail = await authedGmail(userId)
-  const after = Math.floor((Date.now() - LOOKBACK_DAYS * 24 * 60 * 60 * 1000) / 1000)
+  const after = Math.floor((Date.now() - lookbackDays * 24 * 60 * 60 * 1000) / 1000)
 
   const [purchase, promo, charity] = await Promise.all([
     listIds(gmail, [
       `after:${after}`,
       '(subject:order OR subject:receipt OR subject:invoice OR subject:confirmation',
       'OR subject:subscription OR subject:delivery OR subject:shipped OR subject:booking)',
-    ].join(' '), MAX_EMAILS),
-    listIds(gmail, `after:${after} category:promotions`, MAX_EMAILS),
+    ].join(' '), maxEmails),
+    listIds(gmail, `after:${after} category:promotions`, maxEmails),
     listIds(gmail, [
       `after:${after}`,
       '(subject:donation OR subject:donate OR subject:"your donation"',
       'OR subject:"your gift" OR subject:"thank you for your gift"',
       'OR subject:"tax receipt" OR subject:"tax deductible" OR subject:"charitable")',
-    ].join(' '), MAX_EMAILS),
+    ].join(' '), maxEmails),
   ])
 
   const seen = new Set<string>()
@@ -130,7 +144,7 @@ export async function listEmailIds(userId: string): Promise<string[]> {
     if (!seen.has(id)) {
       seen.add(id)
       merged.push(id)
-      if (merged.length >= MAX_EMAILS) break
+      if (merged.length >= maxEmails) break
     }
   }
   return merged
@@ -145,7 +159,10 @@ export async function fetchMetadataForIds(userId: string, ids: string[]): Promis
 
   for (let i = 0; i < ids.length; i += FETCH_CONCURRENCY) {
     const chunk = ids.slice(i, i + FETCH_CONCURRENCY)
-    const fetched = await Promise.all(
+    // allSettled: a single message that 404s (deleted) or errors shouldn't
+    // sink the whole sync — we just skip it. (An auth/scope error on the very
+    // first call still surfaces below so the caller can prompt a reconnect.)
+    const settled = await Promise.allSettled(
       chunk.map(id =>
         gmail.users.messages.get({
           userId: 'me',
@@ -155,7 +172,15 @@ export async function fetchMetadataForIds(userId: string, ids: string[]): Promis
         })
       )
     )
-    for (const res of fetched) {
+    // If everything in the first chunk failed with an auth/scope problem, rethrow
+    // so the caller returns a clean reconnect prompt instead of "0 synced".
+    if (i === 0 && settled.every(s => s.status === 'rejected')) {
+      const firstErr = (settled[0] as PromiseRejectedResult).reason
+      if (gmailErrorKind(firstErr)) throw firstErr
+    }
+    for (const s of settled) {
+      if (s.status !== 'fulfilled') continue
+      const res = s.value
       const headers = res.data.payload?.headers ?? []
       const get = (name: string) =>
         headers.find(h => h.name?.toLowerCase() === name.toLowerCase())?.value ?? ''

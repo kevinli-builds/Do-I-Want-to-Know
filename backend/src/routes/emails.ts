@@ -1,6 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { listEmailIds, fetchMetadataForIds, isAuthError } from '../lib/gmail'
+import { listEmailIds, fetchMetadataForIds, gmailErrorKind } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 import { asyncHandler } from '../lib/asyncHandler'
 
@@ -35,6 +35,10 @@ router.post('/sync', asyncHandler(async (req, res) => {
   const { userId } = req.body
   if (!userId) return void res.status(400).json({ error: 'userId required' })
 
+  // Optional per-sync customization (clamped in listEmailIds)
+  const lookbackDays = Number(req.body?.lookbackDays) || undefined
+  const maxEmails = Number(req.body?.maxEmails) || undefined
+
   const token = await prisma.oAuthToken.findUnique({ where: { userId } })
   if (!token) return void res.status(403).json({ error: 'Gmail not connected — please connect first' })
 
@@ -59,7 +63,7 @@ router.post('/sync', asyncHandler(async (req, res) => {
   try {
     // 1. List candidate message IDs (cheap), then drop ones we've already
     //    processed BEFORE fetching metadata — so repeat syncs only pull new mail.
-    const ids = await listEmailIds(userId)
+    const ids = await listEmailIds(userId, { lookbackDays, maxEmails })
     const existing = await prisma.ledgerEntry.findMany({
       where: { userId },
       select: { emailId: true },
@@ -70,7 +74,8 @@ router.post('/sync', asyncHandler(async (req, res) => {
     if (newIds.length === 0) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
       const total = await prisma.ledgerEntry.count({ where: { userId } })
-      return void res.json({ synced: 0, total, message: 'Already up to date' })
+      const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
+      return void res.json({ synced: 0, total, oldestDate: oldest?.date ?? null, message: 'Already up to date' })
     }
 
     // 2. Fetch metadata only for the new IDs, then extract with Claude.
@@ -85,21 +90,26 @@ router.post('/sync', asyncHandler(async (req, res) => {
       .filter((pair): pair is [string, NonNullable<(typeof extracted extends Map<string, infer V> ? V : never)>] =>
         pair[1] !== null
       )
-      .map(([emailId, entry]) => ({
-        userId,
-        emailId,
-        category: entry.category,
-        vendor: entry.vendor,
-        amount: entry.amount ?? null,
-        currency: entry.currency ?? 'USD',
-        date: safeDate(entry.date, rawById.get(emailId)?.date),
-        description: entry.description,
-        senderEmail: rawById.get(emailId)?.senderEmail ?? null,
-        unsubscribe: rawById.get(emailId)?.unsubscribe ?? null,
-        termMonths: typeof entry.termMonths === 'number' && entry.termMonths > 1
-          ? Math.round(entry.termMonths)
-          : null,
-      }))
+      .map(([emailId, entry]) => {
+        // Coerce Claude's output defensively — a string amount, NaN, or a
+        // non-string field would otherwise fail the Prisma insert and sink the
+        // whole sync (the cause of the PrismaClientValidationError in the logs).
+        const amt = typeof entry.amount === 'number' ? entry.amount : Number(entry.amount)
+        const term = Number(entry.termMonths)
+        return {
+          userId,
+          emailId,
+          category: String(entry.category ?? 'other'),
+          vendor: String(entry.vendor ?? 'Unknown'),
+          amount: Number.isFinite(amt) && amt >= 0 ? amt : null,
+          currency: String(entry.currency ?? 'USD').slice(0, 8),
+          date: safeDate(entry.date, rawById.get(emailId)?.date),
+          description: String(entry.description ?? ''),
+          senderEmail: rawById.get(emailId)?.senderEmail ?? null,
+          unsubscribe: rawById.get(emailId)?.unsubscribe ?? null,
+          termMonths: Number.isFinite(term) && term > 1 ? Math.round(term) : null,
+        }
+      })
 
     // createMany throws on an empty array, so only insert when there's data
     if (rows.length > 0) {
@@ -108,11 +118,19 @@ router.post('/sync', asyncHandler(async (req, res) => {
     await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
 
     const total = await prisma.ledgerEntry.count({ where: { userId } })
-    return void res.json({ synced: rows.length, total })
+    const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
+    return void res.json({ synced: rows.length, total, oldestDate: oldest?.date ?? null })
   } catch (err) {
-    if (isAuthError(err)) {
+    const kind = gmailErrorKind(err)
+    if (kind === 'expired') {
       return void res.status(401).json({
         error: 'Your Gmail session expired — tap Connect Gmail to refresh.',
+        reauth: true,
+      })
+    }
+    if (kind === 'scope') {
+      return void res.status(403).json({
+        error: 'Gmail read access wasn’t granted. Tap Connect Gmail and keep the “Read your email” box checked.',
         reauth: true,
       })
     }

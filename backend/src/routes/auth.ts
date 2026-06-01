@@ -96,6 +96,22 @@ router.get('/google/callback', async (req, res) => {
   const { tokens } = await oauth2Client.getToken(code)
   oauth2Client.setCredentials(tokens)
 
+  // Google's granular consent lets users uncheck the Gmail permission. If they
+  // did, every Gmail call would later 403 ("Insufficient Permission"), so catch
+  // it now with a clear message instead of a confusing failure on first sync.
+  if (!String(tokens.scope ?? '').includes('gmail.readonly')) {
+    const back = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
+    return void res.status(400).send(`<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gmail access needed</title>
+<style>body{font-family:system-ui,sans-serif;background:#f7f7ff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
+.card{text-align:center;padding:48px 32px;max-width:440px}.x{font-size:56px}h1{color:#1a1a2e;margin:16px 0 8px;font-size:23px}
+p{color:#666;font-size:16px;line-height:1.5}a{display:inline-block;margin-top:18px;background:#6c63ff;color:#fff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700}</style></head>
+<body><div class="card"><div class="x">📭</div><h1>One more permission needed</h1>
+<p>To build your inbox insights, the app needs permission to <strong>read your Gmail</strong>. On the Google screen, please keep the <em>"Read your email messages and settings"</em> box checked.</p>
+${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`)
+  }
+
   // Fetch the user's verified Gmail address
   const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client })
   const { data } = await oauth2.userinfo.get()

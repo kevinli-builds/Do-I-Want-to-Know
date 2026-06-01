@@ -20,6 +20,9 @@ export interface UserStatus {
   id: string
   email: string | null
   connected: boolean
+  lastSyncedAt?: string | null
+  entryCount?: number
+  oldestDate?: string | null
 }
 
 export interface SubscriptionInsight {
@@ -67,7 +70,13 @@ export interface WrappedData {
 export interface SyncResult {
   synced: number
   total: number
+  oldestDate?: string | null
   message?: string
+}
+
+export interface SyncOptions {
+  lookbackDays?: number
+  maxEmails?: number
 }
 
 /** Thrown when the Gmail token has expired/been revoked and the user must reconnect. */
@@ -213,17 +222,17 @@ export function downloadExcel(userId: string): void {
   document.body.removeChild(a)
 }
 
-export async function syncEmails(userId: string): Promise<SyncResult> {
+export async function syncEmails(userId: string, opts: SyncOptions = {}): Promise<SyncResult> {
   const res = await fetch(`${API}/emails/sync`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ userId }),
+    body: JSON.stringify({ userId, ...opts }),
   })
   const data = await res.json().catch(() => ({}))
   if (!res.ok) {
-    // Expired/revoked Gmail token — caller should prompt a reconnect
-    if (res.status === 401 && data.reauth) {
-      throw new ReauthError(data.error ?? 'Your Gmail session expired — please reconnect.')
+    // Expired token OR missing Gmail scope — caller should prompt a reconnect
+    if (data.reauth) {
+      throw new ReauthError(data.error ?? 'Please reconnect Gmail.')
     }
     // Surface the backend's friendly message (e.g. rate-limit notice)
     throw new Error(data.error ?? 'Sync failed — please try again')

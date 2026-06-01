@@ -10,6 +10,12 @@ import { MonitorView } from './components/MonitorView'
 import { TransactionsView } from './components/TransactionsView'
 import { UnsubscribeView } from './components/UnsubscribeView'
 
+function fmtMonthYear(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+
 export default function Home() {
   const [userId,    setUserId]    = useState('')
   const [connected, setConnected] = useState(false)
@@ -24,10 +30,25 @@ export default function Home() {
   const [syncNotice, setSyncNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
   // Bumped after a sync so the data-fetching tabs (Monitor/Audit/Unsubscribe) reload
   const [refreshKey, setRefreshKey] = useState(0)
+  // Sync customization + progress
+  const [syncYears, setSyncYears] = useState(3)
+  const [syncMax, setSyncMax] = useState(500)
+  const [showSyncOpts, setShowSyncOpts] = useState(false)
+  const [progress, setProgress] = useState<{ count: number; oldest: string | null }>({ count: 0, oldest: null })
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
   const slowStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Restore + persist sync settings on this device
+  useEffect(() => {
+    const y = Number(localStorage.getItem('diwtkn_sync_years'))
+    const m = Number(localStorage.getItem('diwtkn_sync_max'))
+    if (y) setSyncYears(y)
+    if (m) setSyncMax(m)
+  }, [])
+  useEffect(() => { localStorage.setItem('diwtkn_sync_years', String(syncYears)) }, [syncYears])
+  useEffect(() => { localStorage.setItem('diwtkn_sync_max', String(syncMax)) }, [syncMax])
 
   // Fetch fresh data from the backend and update both state + local cache.
   // Only the all-time view (year === null) is cached, so the instant-load
@@ -61,12 +82,13 @@ export default function Home() {
     setSyncing(true)
     setSyncNotice(null)
     try {
-      const result = await syncEmails(userId)
+      const result = await syncEmails(userId, { lookbackDays: syncYears * 365, maxEmails: syncMax })
       setSyncNotice({
         text: result.synced > 0
           ? `Synced ${result.synced} new email${result.synced === 1 ? '' : 's'}.`
           : (result.message ?? "You're already up to date."),
       })
+      setProgress({ count: result.total, oldest: result.oldestDate ?? null })
       setRefreshKey(k => k + 1)              // reload Monitor/Audit/Unsubscribe
       await loadWrapped(userId, selectedYear) // reload Wrapped
     } catch (e) {
@@ -75,7 +97,7 @@ export default function Home() {
     } finally {
       setSyncing(false)
     }
-  }, [userId, selectedYear, loadWrapped])
+  }, [userId, selectedYear, loadWrapped, syncYears, syncMax])
 
   useEffect(() => {
     async function init() {
@@ -117,6 +139,7 @@ export default function Home() {
         const status = await upsertUser(id)
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
+        setProgress({ count: status.entryCount ?? 0, oldest: status.oldestDate ?? null })
 
         if (status.connected) {
           await loadWrapped(id)
@@ -215,9 +238,43 @@ export default function Home() {
               <button className="fab-toast-x" onClick={() => setSyncNotice(null)} aria-label="Dismiss">×</button>
             </div>
           )}
-          <button className="fab" onClick={handleSync} disabled={syncing}>
-            {syncing ? '⏳ Syncing…' : '🔄 Sync Emails'}
-          </button>
+
+          {showSyncOpts && (
+            <div className="sync-opts">
+              <label>
+                History
+                <select value={syncYears} onChange={e => setSyncYears(Number(e.target.value))}>
+                  <option value={1}>1 year</option>
+                  <option value={2}>2 years</option>
+                  <option value={3}>3 years</option>
+                </select>
+              </label>
+              <label>
+                Per sync
+                <select value={syncMax} onChange={e => setSyncMax(Number(e.target.value))}>
+                  <option value={100}>100 emails</option>
+                  <option value={250}>250 emails</option>
+                  <option value={500}>500 emails</option>
+                  <option value={1000}>1,000 emails</option>
+                  <option value={2000}>2,000 emails</option>
+                </select>
+              </label>
+              <p className="sync-opts-hint">Bigger syncs take longer; if one stops early, just sync again — it picks up where it left off.</p>
+            </div>
+          )}
+
+          {progress.count > 0 && (
+            <div className="fab-progress">
+              {progress.count.toLocaleString()} emails synced{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
+            </div>
+          )}
+
+          <div className="fab-row">
+            <button className="fab-gear" onClick={() => setShowSyncOpts(s => !s)} title="Sync settings" aria-label="Sync settings">⚙</button>
+            <button className="fab" onClick={handleSync} disabled={syncing}>
+              {syncing ? '⏳ Syncing…' : '🔄 Sync Emails'}
+            </button>
+          </div>
         </div>
       </>
     )

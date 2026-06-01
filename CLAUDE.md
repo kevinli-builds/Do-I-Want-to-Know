@@ -186,10 +186,10 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/users` | Upsert user by device UUID, returns `{id, email, connected}` |
+| POST | `/users` | Upsert user by device UUID, returns `{id, email, connected, lastSyncedAt, entryCount, oldestDate}` |
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
 | GET | `/auth/google/callback` | OAuth callback — stores tokens, then redirects to `<redirect>/?connected=1` (web) or shows a "close tab" page (mobile) |
-| POST | `/emails/sync` | `{userId}` → fetch+extract new emails, returns `{synced, total}`. Rate-limited per user (429 if synced within `SYNC_RATE_LIMIT_HOURS`) |
+| POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → fetch+extract new emails, returns `{synced, total, oldestDate}`. Rate-limited (429); 401/403 `{reauth}` on expired token / missing Gmail scope |
 | GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, trends, subscription/inbox monitors, auto-flags |

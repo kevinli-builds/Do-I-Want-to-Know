@@ -1,7 +1,9 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Category } from './categories'
 
-const anthropic = new Anthropic()
+// maxRetries lets the SDK back off and retry transient 429/5xx (honoring
+// retry-after) instead of failing immediately.
+const anthropic = new Anthropic({ maxRetries: 4 })
 
 export interface ExtractedEntry {
   category: Category
@@ -31,7 +33,8 @@ export async function extractEntries(
       )
       .join('\n\n---\n\n')
 
-    const msg = await anthropic.messages.create({
+    try {
+      const msg = await anthropic.messages.create({
       model: 'claude-haiku-4-5',
       max_tokens: 4096,
       // System prompt is identical across batches → mark it cacheable so the
@@ -73,20 +76,22 @@ termMonths rule:
 - Set termMonths ONLY when a single charge clearly covers a fixed multi-month term paid upfront, e.g. "6-month plan" → 6, "annual"/"1-year"/"yearly" → 12, "quarterly"/"3 months" → 3, "biannual"/"2 years" → 24.
 - This lets us show the monthly-equivalent cost. OMIT termMonths for ordinary one-off purchases and normal monthly charges.` }],
       messages: [{ role: 'user', content: prompt }],
-    })
-
-    const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-    const jsonMatch = text.match(/\{[\s\S]*\}/)
-
-    try {
-      const parsed: BatchResult = JSON.parse(jsonMatch?.[0] ?? '{}')
-      batch.forEach((e, idx) => {
-        results.set(e.id, parsed[String(idx)] ?? null)
       })
-    } catch {
-      // If Claude's JSON is unparseable, skip the whole batch safely
+
+      const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
+      const jsonMatch = text.match(/\{[\s\S]*\}/)
+      const parsed: BatchResult = JSON.parse(jsonMatch?.[0] ?? '{}')
+      batch.forEach((e, idx) => results.set(e.id, parsed[String(idx)] ?? null))
+    } catch (err) {
+      // API error (rate limit after retries) or unparseable JSON: skip this
+      // batch so its emails are retried on the next sync, rather than failing
+      // the whole sync.
+      console.error('[extractor] batch skipped:', (err as Error)?.message)
       batch.forEach(e => results.set(e.id, null))
     }
+
+    // Gentle pacing to ease Claude's per-minute token limit on big backfills
+    if (i + BATCH_SIZE < emails.length) await new Promise(r => setTimeout(r, 1200))
   }
 
   return results
