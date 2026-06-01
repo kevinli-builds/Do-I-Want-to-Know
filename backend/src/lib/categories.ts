@@ -8,6 +8,7 @@ export const CATEGORIES = [
   'entertainment',
   'charity',
   'marketing',
+  'refund',
   'other',
 ] as const
 
@@ -31,5 +32,6 @@ export const CATEGORY_LABELS: Record<Category, string> = {
   entertainment: 'Entertainment',
   charity:       'Donations',
   marketing:     'Marketing Email',
+  refund:        'Refunds',
   other:         'Other',
 }

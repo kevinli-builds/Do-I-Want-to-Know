@@ -25,11 +25,15 @@ export function AnalyticsChart({ data }: { data: MonitorAnalytics }) {
         values: source[c] ?? data.months.map(() => 0),
       }))
     }
-    // Single aggregate line = sum of visible categories per month
+    // Single aggregate line. For spend, refunds subtract (net spend); for the
+    // email count, every category (incl. refunds) counts as one email.
     const totals = data.months.map((_, i) =>
-      visibleCats.reduce((sum, c) => sum + (source[c]?.[i] ?? 0), 0)
+      visibleCats.reduce((sum, c) => {
+        const v = source[c]?.[i] ?? 0
+        return sum + (metric === 'spend' && c === 'refund' ? -v : v)
+      }, 0)
     )
-    return [{ name: metric === 'spend' ? 'Total spend' : 'Total emails', color: '#6c63ff', values: totals }]
+    return [{ name: metric === 'spend' ? 'Net spend' : 'Total emails', color: '#6c63ff', values: totals }]
   }, [grouped, visibleCats, source, data.months, metric])
 
   function toggleCat(c: string) {

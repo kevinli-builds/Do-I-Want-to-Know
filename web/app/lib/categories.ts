@@ -7,6 +7,7 @@ export const CATEGORY_META: Record<string, { label: string; emoji: string; color
   entertainment: { label: 'Entertainment',  emoji: '🎬', color: '#9b59d0' },
   charity:       { label: 'Donations',       emoji: '💝', color: '#2ca36b' },
   marketing:     { label: 'Marketing Email', emoji: '📣', color: '#c0334a' },
+  refund:        { label: 'Refunds',          emoji: '↩️', color: '#0ea5e9' },
   other:         { label: 'Other',           emoji: '🧾', color: '#888899' },
 }
 

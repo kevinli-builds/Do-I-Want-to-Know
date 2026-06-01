@@ -8,7 +8,7 @@ const money = (n: number) =>
 
 const CATEGORY_EMOJI: Record<string, string> = {
   order: '📦', subscription: '🔁', travel: '✈️', food: '🍔',
-  entertainment: '🎬', charity: '💝', marketing: '📣', other: '🧾',
+  entertainment: '🎬', charity: '💝', marketing: '📣', refund: '↩️', other: '🧾',
 }
 
 function fmtDate(iso: string): string {
@@ -147,7 +147,9 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
                     <span className="txn-vendor">
                       {CATEGORY_EMOJI[t.category] ?? '•'} {t.vendor}
                     </span>
-                    <span className="txn-amount">{t.amount != null ? money(t.amount) : '—'}</span>
+                    <span className="txn-amount" style={t.category === 'refund' ? { color: '#0ea5e9' } : undefined}>
+                      {t.amount != null ? (t.category === 'refund' ? `+${money(t.amount)}` : money(t.amount)) : '—'}
+                    </span>
                   </div>
                   <div className="txn-desc">{t.description}</div>
                   {t.termMonths && t.termMonths > 1 && t.amount != null && (

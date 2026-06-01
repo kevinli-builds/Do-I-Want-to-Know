@@ -76,7 +76,9 @@ function periodLabel(period: Period, base: Date): string {
 }
 
 function kpiTotals(entries: LedgerEntry[]) {
-  const spend = round2(entries.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0))
+  const grossSpend = entries.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0)
+  const refunds = entries.filter(e => e.category === 'refund').reduce((s, e) => s + (e.amount ?? 0), 0)
+  const spend = round2(grossSpend - refunds) // net of refunds
   const transactions = entries.filter(isSpend).length
   const subscriptionSpend = round2(
     entries.filter(e => e.category === 'subscription').reduce((s, e) => s + (e.amount ?? 0), 0)

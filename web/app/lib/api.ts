@@ -45,6 +45,7 @@ export interface SpammerStat {
 
 export interface WrappedStats {
   totalSpend: number
+  refundTotal: number
   byCategory: Record<string, { count: number; spend: number }>
   topVendors: { vendor: string; count: number }[]
   mostExpensive: { vendor: string; amount: number; description: string; date: string; emailId: string; termMonths: number | null } | null

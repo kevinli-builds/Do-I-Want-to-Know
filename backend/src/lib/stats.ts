@@ -49,7 +49,8 @@ export interface MostExpensive {
 }
 
 export interface WrappedStats {
-  totalSpend: number
+  totalSpend: number       // NET of refunds
+  refundTotal: number      // total refunded (positive)
   byCategory: Record<string, CategoryStat>
   topVendors: VendorStat[]
   mostExpensive: MostExpensive | null
@@ -182,11 +183,13 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
   const spendEntries     = entries.filter(e => SPEND_CATEGORIES.includes(e.category as any))
   const marketingEntries = entries.filter(e => e.category === 'marketing')
   const charityEntries   = entries.filter(e => e.category === 'charity')
+  const refundEntries    = entries.filter(e => e.category === 'refund')
 
-  // Total spend (purchases only)
-  const totalSpend = round2(
-    spendEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0)
-  )
+  // Refunds are money back — they offset spend
+  const refundTotal = round2(refundEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0))
+  const grossSpend = spendEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0)
+  // Net total spend = purchases minus refunds
+  const totalSpend = round2(grossSpend - refundTotal)
 
   // Category breakdown (all categories)
   const byCategory: Record<string, CategoryStat> = {}
@@ -209,12 +212,17 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
     ? withAmount.reduce((max, e) => e.amount! > max.amount! ? e : max)
     : null
 
-  // Monthly spend (purchases only)
+  // Monthly spend, net of refunds
   const monthlySpend: Record<string, number> = {}
   for (const e of spendEntries) {
     if (!e.amount) continue
     const key = monthKey(e.date)
     monthlySpend[key] = round2((monthlySpend[key] ?? 0) + e.amount)
+  }
+  for (const e of refundEntries) {
+    if (!e.amount) continue
+    const key = monthKey(e.date)
+    monthlySpend[key] = round2((monthlySpend[key] ?? 0) - e.amount)
   }
 
   // Subscriptions
@@ -239,6 +247,7 @@ export function computeStats(entries: LedgerEntry[]): WrappedStats {
 
   return {
     totalSpend,
+    refundTotal,
     byCategory,
     topVendors,
     mostExpensive: mostExpensive

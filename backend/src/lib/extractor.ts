@@ -47,7 +47,7 @@ For every other email, return a structured object.
 
 Respond ONLY with a JSON object mapping the email index (as a string) to either null or:
 {
-  "category": "order" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "other",
+  "category": "order" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "refund" | "other",
   "vendor": "<clean brand name, e.g. 'Amazon' not 'noreply@amazon.com'>",
   "amount": <number or omit if unknown/not a financial transaction>,
   "currency": "<ISO code, default USD>",
@@ -64,11 +64,13 @@ Category guide:
 - entertainment: event tickets, games, streaming one-offs
 - charity: donations to nonprofits, charities, crowdfunding (GoFundMe, etc.) — use amount if present
 - marketing: promotional newsletters, deals, sales announcements, coupon emails, brand updates — use vendor = the sending brand; omit amount
+- refund: a refund, return completed, money back, or credit issued by a merchant ("we've refunded", "your refund is on its way", "return processed", "credit applied"). Set amount = the refunded amount (positive). This is money coming BACK, so it's tracked as negative spend.
 - other: any other confirmed purchase or financial notification not covered above
 
 Key rules:
 - "marketing" is for bulk/promotional email from businesses (newsletters, flash sales, "we miss you", coupon codes, etc.)
 - Real purchase receipts or order confirmations are NEVER marketing — classify them by type (order, food, etc.)
+- A refund / return / money-back / credit email is "refund", NOT "order" — even if it's from a store. Only classify as a purchase when money went OUT.
 - Charity thank-you / receipt emails ARE charity, not marketing
 - If unsure between marketing and null, pick marketing for any brand promotional email
 

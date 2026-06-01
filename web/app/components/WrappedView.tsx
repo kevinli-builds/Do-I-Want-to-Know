@@ -118,11 +118,14 @@ export function WrappedView({
         </div>
       ) : (
         <>
-          {/* ── Hero: Total Spend ───────────────────────────────────── */}
+          {/* ── Hero: Total Spend (net of refunds) ──────────────────── */}
           <div className="card hero">
-            <h2>Total Spend{selectedYear ? ` · ${selectedYear}` : ''}</h2>
+            <h2>Net Spend{selectedYear ? ` · ${selectedYear}` : ''}</h2>
             <div className="big">{money(stats.totalSpend)}</div>
-            <div className="sub">across {data.totalEntries} tracked emails</div>
+            <div className="sub">
+              across {data.totalEntries} tracked emails
+              {stats.refundTotal > 0 ? ` · ${money(stats.refundTotal)} refunded` : ''}
+            </div>
           </div>
 
           {/* ── Spend Over Time chart ──────────────────────────────── */}
@@ -148,6 +151,12 @@ export function WrappedView({
               <div className="stat">
                 <div className="n">{charityCount}</div>
                 <div className="l">cause{charityCount === 1 ? '' : 's'} supported</div>
+              </div>
+            )}
+            {stats.refundTotal > 0 && (
+              <div className="stat">
+                <div className="n" style={{ color: '#0ea5e9' }}>−{money(stats.refundTotal)}</div>
+                <div className="l">refunded</div>
               </div>
             )}
           </div>
@@ -259,8 +268,9 @@ export function WrappedView({
                     <span className="label">
                       {categoryEmoji(cat)} {categoryLabel(cat)}
                     </span>
-                    <span className="value">
-                      {info.count}{info.spend > 0 ? ` · ${money(info.spend)}` : ''}
+                    <span className="value" style={cat === 'refund' ? { color: '#0ea5e9' } : undefined}>
+                      {info.count}
+                      {info.spend > 0 ? ` · ${cat === 'refund' ? '−' : ''}${money(info.spend)}` : ''}
                     </span>
                   </div>
                 ))}
