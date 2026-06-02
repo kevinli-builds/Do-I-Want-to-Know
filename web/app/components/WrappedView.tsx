@@ -50,6 +50,7 @@ export function WrappedView({
   onSelectYear,
   yearLoading = false,
   onOpenUnsubscribe,
+  onDisconnect,
 }: {
   userId: string
   data: WrappedData
@@ -58,6 +59,7 @@ export function WrappedView({
   onSelectYear: (year: number | null) => void
   yearLoading?: boolean
   onOpenUnsubscribe?: () => void
+  onDisconnect?: () => void
 }) {
   const stats = data.stats
 
@@ -81,6 +83,11 @@ export function WrappedView({
           {data.totalEntries > 0 && (
             <button className="btn btn-outline" onClick={() => { downloadExcel(userId).catch(() => {}) }}>
               ⬇ Export
+            </button>
+          )}
+          {onDisconnect && (
+            <button className="btn btn-outline" onClick={onDisconnect}>
+              Disconnect
             </button>
           )}
         </div>

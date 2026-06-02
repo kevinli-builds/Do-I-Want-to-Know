@@ -4,13 +4,31 @@ import { google } from 'googleapis'
 import { getOAuthClient } from '../lib/gmail'
 import { prisma } from '../lib/prisma'
 import { logError } from '../lib/log'
-import { newToken, createSession } from '../lib/session'
+import { newToken, createSession, requireSession, revokeUserSessions } from '../lib/session'
+import { encryptSecret, decryptSecret } from '../lib/crypto'
 
 const router = Router()
 
 // One-time handoff codes expire quickly — they only need to survive the redirect
 // back to the frontend and the immediate exchange call.
 const LOGIN_CODE_TTL_MS = 10 * 60 * 1000
+
+// Lightweight in-memory rate limiter for the unauthenticated /auth/exchange
+// endpoint (defense in depth — the codes are already unguessable). Caps attempts
+// per client IP per window. Single-instance deploy, so an in-process map is fine.
+const EXCHANGE_MAX = 20
+const EXCHANGE_WINDOW_MS = 60 * 1000
+const exchangeHits = new Map<string, { count: number; resetAt: number }>()
+function exchangeRateLimited(ip: string): boolean {
+  const now = Date.now()
+  const rec = exchangeHits.get(ip)
+  if (!rec || rec.resetAt < now) {
+    exchangeHits.set(ip, { count: 1, resetAt: now + EXCHANGE_WINDOW_MS })
+    return false
+  }
+  rec.count++
+  return rec.count > EXCHANGE_MAX
+}
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',
@@ -140,13 +158,15 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
     where: { userId: canonicalId },
     create: {
       userId: canonicalId,
-      accessToken: tokens.access_token!,
-      refreshToken: tokens.refresh_token!,
+      accessToken: encryptSecret(tokens.access_token!),
+      refreshToken: encryptSecret(tokens.refresh_token!),
       expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
     },
     update: {
-      accessToken: tokens.access_token!,
-      refreshToken: tokens.refresh_token ?? existing?.refreshToken ?? '',
+      accessToken: encryptSecret(tokens.access_token!),
+      // Google may omit the refresh token on re-auth — keep the stored one
+      // (already encrypted) rather than re-encrypting it.
+      refreshToken: tokens.refresh_token ? encryptSecret(tokens.refresh_token) : existing?.refreshToken ?? '',
       expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
     },
   })
@@ -243,8 +263,16 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
 // Trade a one-time handoff code (from the OAuth redirect) for a durable session
 // token. The code is single-use and short-lived; we delete it immediately.
 router.post('/exchange', async (req, res) => {
+  const ip = req.ip ?? 'unknown'
+  if (exchangeRateLimited(ip)) {
+    return void res.status(429).json({ error: 'Too many attempts — please wait a minute and try again.' })
+  }
+
   const code = String(req.body?.code ?? '').trim()
   if (!code) return void res.status(400).json({ error: 'code required' })
+
+  // Opportunistic cleanup so expired handoff codes don't accumulate.
+  prisma.loginCode.deleteMany({ where: { expiresAt: { lt: new Date() } } }).catch(() => {})
 
   const row = await prisma.loginCode.findUnique({ where: { code } })
   if (!row || row.expiresAt.getTime() < Date.now()) {
@@ -256,6 +284,32 @@ router.post('/exchange', async (req, res) => {
   await prisma.loginCode.delete({ where: { code } }).catch(() => {})
   const token = await createSession(row.userId)
   res.json({ userId: row.userId, token })
+})
+
+// POST /auth/disconnect   (requires a valid session)
+// Disconnects Gmail: deletes the stored OAuth tokens and revokes ALL of the
+// user's sessions (logs them out everywhere). Ledger data is left intact, so a
+// later reconnect shows it again without re-syncing. Best-effort token
+// revocation at Google is attempted but never blocks the response.
+router.post('/disconnect', requireSession, async (req, res) => {
+  const userId = req.authUserId!
+  try {
+    const token = await prisma.oAuthToken.findUnique({ where: { userId } })
+    if (token) {
+      // Best-effort: ask Google to revoke the refresh token too.
+      try {
+        const oauth2Client = getOAuthClient()
+        oauth2Client.setCredentials({ refresh_token: decryptSecret(token.refreshToken) })
+        await oauth2Client.revokeCredentials()
+      } catch { /* revocation is best-effort */ }
+      await prisma.oAuthToken.delete({ where: { userId } }).catch(() => {})
+    }
+    await revokeUserSessions(userId)
+    res.json({ ok: true })
+  } catch (err) {
+    logError('[auth/disconnect] failed:', err)
+    res.status(500).json({ error: 'Could not disconnect — please try again.' })
+  }
 })
 
 export { router as authRouter }

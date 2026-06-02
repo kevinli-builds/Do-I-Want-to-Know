@@ -21,20 +21,35 @@ export function hashToken(token: string): string {
 export const AUTH_ENFORCED =
   process.env.AUTH_ENFORCED !== 'false' && process.env.AUTH_ENFORCED !== '0'
 
+// How long a session stays valid. Override with SESSION_TTL_DAYS.
+const SESSION_TTL_DAYS = Number(process.env.SESSION_TTL_DAYS ?? 90)
+
 /** Mint a session for a user and return the raw token (only the hash is stored). */
 export async function createSession(userId: string): Promise<string> {
   const token = newToken()
-  await prisma.session.create({ data: { userId, tokenHash: hashToken(token) } })
+  const expiresAt = new Date(Date.now() + SESSION_TTL_DAYS * 24 * 3600 * 1000)
+  await prisma.session.create({ data: { userId, tokenHash: hashToken(token), expiresAt } })
   return token
 }
 
-/** Resolve the user id from a request's Bearer token, or null if absent/invalid. */
+/** Revoke every session for a user (used by Disconnect). */
+export async function revokeUserSessions(userId: string): Promise<void> {
+  await prisma.session.deleteMany({ where: { userId } })
+}
+
+/** Resolve the user id from a request's Bearer token, or null if absent/invalid/expired. */
 export async function userIdFromRequest(req: Request): Promise<string | null> {
   const auth = req.header('authorization') ?? ''
   const m = auth.match(/^Bearer\s+(.+)$/i)
   if (!m) return null
   const session = await prisma.session.findUnique({ where: { tokenHash: hashToken(m[1].trim()) } })
-  return session?.userId ?? null
+  if (!session) return null
+  if (session.expiresAt.getTime() < Date.now()) {
+    // Expired — clean it up and treat as unauthenticated.
+    await prisma.session.delete({ where: { id: session.id } }).catch(() => {})
+    return null
+  }
+  return session.userId
 }
 
 // Augment Express's Request with the authenticated user id.

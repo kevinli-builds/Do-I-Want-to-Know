@@ -64,7 +64,8 @@ Do I Want To Know/
 │   │       ├── 20260529000000_rate_limit/     Adds User.lastSyncedAt for sync rate limiting
 │   │       ├── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
 │   │       ├── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
-│       └── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
+│       ├── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
+│       └── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -185,6 +186,7 @@ model Session {                    // bearer session granted after OAuth — onl
   id        String   @id @default(cuid())
   userId    String
   tokenHash String   @unique       // sha256(token); raw token lives only in the client + Authorization header
+  expiresAt DateTime               // sessions expire (default 90d, SESSION_TTL_DAYS)
   createdAt DateTime @default(now())
 }
 
@@ -201,7 +203,8 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 ## Authentication / authorization
 - **Data endpoints require a bearer session token** (`Authorization: Bearer <token>`), enforced by `requireSession` (`lib/session.ts`): `/wrapped`, `/monitor`, `/transactions`, `/export`, `/acceptances`, `/emails/sync`. The **token** (not the userId) is the credential; if a route also carries a userId it must match the session's user.
 - A token is minted **only after Gmail OAuth proves ownership**. The callback can't safely put a token in the redirect URL (URLs leak via history/referrer/logs), so it issues a **one-time `LoginCode`**; the frontend trades it via `POST /auth/exchange` for `{userId, token}` and stores the token in `localStorage`.
-- Only the **sha256 hash** of a token is stored (`Session.tokenHash`) — a DB leak can't be replayed.
+- Only the **sha256 hash** of a token is stored (`Session.tokenHash`) — a DB leak can't be replayed. Sessions **expire** (`Session.expiresAt`, default 90d); expired tokens are rejected and cleaned up.
+- **Gmail OAuth tokens are encrypted at rest** (AES-256-GCM via `lib/crypto.ts`) when `TOKEN_ENCRYPTION_KEY` is set — backward-compatible with existing plaintext rows. `POST /auth/disconnect` revokes the OAuth tokens + all of the user's sessions.
 - `POST /users` is the unauthenticated bootstrap: it returns full status **only** when a valid token is presented; otherwise it always answers `connected:false` (a guessed userId alone reveals nothing).
 - On a 401 `{reauth:true}` the web client drops the dead token and shows Connect.
 - **CORS is locked** to `FRONTEND_URL` (+ localhost), not `*`. The admin list uses an `X-Admin-Key` **header** (not a query param). Errors log via `lib/log.ts` (error name + truncated message only — never full objects / PII).
@@ -215,7 +218,8 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | POST | `/users` | Bootstrap/status. With a valid `Authorization: Bearer` token → `{id, email, connected, lastSyncedAt, entryCount, oldestDate, caughtUp}`; without one → always `connected:false` (reveals nothing) |
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
 | GET | `/auth/google/callback` | OAuth callback — stores Gmail tokens, mints a one-time `LoginCode`, redirects to `<redirect>/?connected=1&code=<code>` (web) or shows a "close tab" page (mobile) |
-| POST | `/auth/exchange` | `{code}` → trades the one-time handoff code for `{userId, token}` (the durable session token). Code is single-use + expires in 10 min |
+| POST | `/auth/exchange` | `{code}` → trades the one-time handoff code for `{userId, token}` (the durable session token). Code is single-use + expires in 10 min; rate-limited per IP |
+| POST | `/auth/disconnect` | Requires session. Revokes Gmail (deletes OAuth tokens, best-effort Google revoke) + all of the user's sessions. Ledger data is kept |
 | POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
 | GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
@@ -246,6 +250,8 @@ SYNC_MAX_EMAILS=2000                 # Optional, max emails ingested per sync (d
 ACCESS_WEBHOOK_URL=https://...       # Optional, Discord/Slack incoming webhook — pinged on new access requests
 ADMIN_KEY=...                        # Optional, protects GET /access/requests (owner-only list)
 AUTH_ENFORCED=true                   # Optional kill-switch (default true). Set false/0 to disable session enforcement and fall back to legacy userId-based access WITHOUT a code rollback — emergency use only
+TOKEN_ENCRYPTION_KEY=...             # Optional but recommended. Any strong secret — enables AES-256-GCM encryption of stored Gmail OAuth tokens at rest. If unset, tokens are stored plaintext (Neon still encrypts at rest). Backward-compatible: existing rows re-encrypt on next refresh/reconnect. Do NOT remove it once set (you'd be unable to decrypt stored tokens)
+SESSION_TTL_DAYS=90                  # Optional, how long a bearer session stays valid (default 90)
 PORT=3000                            # Optional, defaults to 3000
 ```
 

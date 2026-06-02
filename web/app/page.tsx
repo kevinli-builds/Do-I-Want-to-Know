@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, ReauthError, type WrappedData } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, ReauthError, type WrappedData } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
@@ -103,6 +103,21 @@ export default function Home() {
       setSyncing(false)
     }
   }, [userId, selectedYear, loadWrapped, syncYears, syncMax])
+
+  // Disconnect Gmail: revoke server-side, drop local token + cache, show Connect.
+  const handleDisconnect = useCallback(async () => {
+    if (!window.confirm('Disconnect Gmail? Your token is revoked and you’ll need to reconnect to sync again. Your existing data is kept.')) return
+    try {
+      await disconnectGmail()
+    } catch {
+      /* even if the server call fails, fall through and reset locally */
+    }
+    clearWrappedCache(userId)
+    setWrapped(null)
+    setCachedAt(null)
+    setConnected(false)
+    setView('wrapped')
+  }, [userId])
 
   useEffect(() => {
     async function init() {
@@ -234,6 +249,7 @@ export default function Home() {
             onSelectYear={handleSelectYear}
             yearLoading={yearLoading}
             onOpenUnsubscribe={() => setView('unsubscribe')}
+            onDisconnect={handleDisconnect}
           />
         ) : view === 'monitor' ? (
           <MonitorView userId={userId} refreshKey={refreshKey} />

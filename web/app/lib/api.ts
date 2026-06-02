@@ -263,6 +263,16 @@ export function startConnect(userId: string): void {
     `${API}/auth/google?userId=${encodeURIComponent(userId)}&redirect=${encodeURIComponent(redirect)}`
 }
 
+// Disconnect Gmail: revokes the stored OAuth tokens + all sessions server-side,
+// then drops the local token. Ledger data is kept (reconnect shows it again).
+export async function disconnectGmail(): Promise<void> {
+  try {
+    await authedFetch(`${API}/auth/disconnect`, { method: 'POST' })
+  } finally {
+    clearToken()
+  }
+}
+
 export async function getWrapped(userId: string, year?: number | null): Promise<WrappedData> {
   const qs = year != null ? `?year=${year}` : ''
   const res = await authedFetch(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)

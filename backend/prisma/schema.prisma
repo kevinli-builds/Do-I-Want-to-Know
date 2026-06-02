@@ -26,6 +26,7 @@ model Session {
   userId    String
   user      User     @relation(fields: [userId], references: [id])
   tokenHash String   @unique
+  expiresAt DateTime                      // sessions expire (default 90d) — set on creation
   createdAt DateTime @default(now())
 }
 

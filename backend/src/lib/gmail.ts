@@ -1,5 +1,6 @@
 import { google, gmail_v1 } from 'googleapis'
 import { prisma } from './prisma'
+import { encryptSecret, decryptSecret } from './crypto'
 
 // How far back to look, and the max emails to ingest per sync. Configurable via
 // env so the window/volume can be tuned without a code change.
@@ -71,8 +72,8 @@ async function authedGmail(userId: string): Promise<gmail_v1.Gmail> {
 
   const oauth2Client = getOAuthClient()
   oauth2Client.setCredentials({
-    access_token: token.accessToken,
-    refresh_token: token.refreshToken,
+    access_token: decryptSecret(token.accessToken),
+    refresh_token: decryptSecret(token.refreshToken),
     expiry_date: token.expiresAt.getTime(),
   })
   oauth2Client.on('tokens', async (tokens) => {
@@ -80,7 +81,7 @@ async function authedGmail(userId: string): Promise<gmail_v1.Gmail> {
       await prisma.oAuthToken.update({
         where: { userId },
         data: {
-          accessToken: tokens.access_token,
+          accessToken: encryptSecret(tokens.access_token),
           expiresAt: new Date(tokens.expiry_date ?? Date.now() + 3600 * 1000),
         },
       }).catch(() => {/* token row may have been replaced; ignore */})
