@@ -8,12 +8,13 @@ import {
   SafeAreaView,
 } from 'react-native'
 import * as WebBrowser from 'expo-web-browser'
+import * as Linking from 'expo-linking'
 import { Ionicons } from '@expo/vector-icons'
-import { getConnectUrl } from '../api/client'
+import { getConnectUrl, exchangeCode } from '../api/client'
 
 interface Props {
   userId: string
-  onConnected: () => void
+  onConnected: (canonicalId?: string) => void
 }
 
 const BULLETS = [
@@ -28,8 +29,21 @@ export function ConnectScreen({ userId, onConnected }: Props) {
   async function handleConnect() {
     setLoading(true)
     try {
-      await WebBrowser.openBrowserAsync(getConnectUrl(userId))
-      // Browser closes after OAuth — let App re-check connection status
+      // Deep link the backend redirects the one-time code back to. Resolves to
+      // diwtkn://auth (standalone) or exp://…/--/auth (Expo Go).
+      const returnUrl = Linking.createURL('auth')
+      const result = await WebBrowser.openAuthSessionAsync(getConnectUrl(userId, returnUrl), returnUrl)
+
+      if (result.type === 'success' && result.url) {
+        const code = Linking.parse(result.url).queryParams?.code
+        if (typeof code === 'string' && code) {
+          // Trade the code for a session token, then converge onto the canonical id.
+          const { userId: canonicalId } = await exchangeCode(code)
+          onConnected(canonicalId)
+          return
+        }
+      }
+      // No code (cancelled, or rollback/legacy mode) — re-check status anyway.
       onConnected()
     } catch {
       // user cancelled or error — just reset

@@ -1,14 +1,34 @@
 import axios from 'axios'
 import Constants from 'expo-constants'
+import { getToken, setToken } from '../lib/userId'
 
 const BASE_URL: string =
   Constants.expoConfig?.extra?.apiUrl ?? 'http://localhost:3000'
 
 export const api = axios.create({ baseURL: BASE_URL })
 
-/** Returns the URL the app opens in a browser for the Gmail OAuth flow */
-export function getConnectUrl(userId: string): string {
-  return `${BASE_URL}/auth/google?userId=${encodeURIComponent(userId)}`
+// Attach the bearer session token (if we have one) to every request. The token,
+// not the userId, is the credential the backend's requireSession checks.
+api.interceptors.request.use(async config => {
+  const token = await getToken()
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  return config
+})
+
+/**
+ * URL the app opens for the Gmail OAuth flow. `redirect` is the app's deep link
+ * (e.g. diwtkn://auth) that the backend sends the one-time handoff code back to.
+ */
+export function getConnectUrl(userId: string, redirect?: string): string {
+  const r = redirect ? `&redirect=${encodeURIComponent(redirect)}` : ''
+  return `${BASE_URL}/auth/google?userId=${encodeURIComponent(userId)}${r}`
+}
+
+/** Trade the one-time code from the OAuth redirect for a durable session token. */
+export const exchangeCode = async (code: string) => {
+  const { data } = await api.post<{ userId: string; token: string }>('/auth/exchange', { code })
+  await setToken(data.token)
+  return data
 }
 
 export interface UserStatus {

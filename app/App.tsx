@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react'
 import { View, ActivityIndicator, StyleSheet } from 'react-native'
 import { SafeAreaProvider } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar'
-import { getUserId } from './src/lib/userId'
+import { getUserId, setUserId as persistUserId } from './src/lib/userId'
 import { upsertUser, UserStatus } from './src/api/client'
 import { ConnectScreen } from './src/screens/ConnectScreen'
 import { WrappedScreen } from './src/screens/WrappedScreen'
@@ -25,11 +25,18 @@ export default function App() {
     }
   }
 
-  // Called by ConnectScreen after the user closes the OAuth browser tab
-  async function handleConnected() {
-    if (!userId) return
+  // Called by ConnectScreen after OAuth. If a canonical id came back from the
+  // code exchange, adopt it (this device converges onto the Gmail-keyed identity).
+  async function handleConnected(canonicalId?: string) {
+    let id = userId
+    if (canonicalId && canonicalId !== userId) {
+      await persistUserId(canonicalId)
+      setUserId(canonicalId)
+      id = canonicalId
+    }
+    if (!id) return
     try {
-      const s = await upsertUser(userId)
+      const s = await upsertUser(id)
       setStatus(s)
     } catch {}
   }

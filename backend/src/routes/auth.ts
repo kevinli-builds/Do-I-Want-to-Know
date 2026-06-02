@@ -35,10 +35,16 @@ function decodeState(state: string): { userId: string; redirect?: string } {
 }
 
 // Only allow redirecting back to known frontends — prevents open-redirect abuse.
+// We permit the configured web origin, localhost (dev), and the Expo app's own
+// deep-link schemes (diwtkn:// in a standalone build, exp:// under Expo Go).
+// The redirect only ever carries a single-use, short-lived handoff code, never a
+// durable secret.
 function safeRedirect(redirect?: string): string | null {
   if (!redirect) return null
   if (process.env.FRONTEND_URL && redirect === process.env.FRONTEND_URL) return redirect
   if (/^http:\/\/localhost(:\d+)?$/.test(redirect)) return redirect
+  if (/^diwtkn:\/\//.test(redirect)) return redirect
+  if (/^exp:\/\/[\w.\-:/]*$/.test(redirect)) return redirect
   return null
 }
 
@@ -155,7 +161,10 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
     await prisma.loginCode.create({
       data: { code, userId: canonicalId, expiresAt: new Date(Date.now() + LOGIN_CODE_TTL_MS) },
     })
-    return void res.redirect(`${target}/?connected=1&code=${encodeURIComponent(code)}`)
+    // Web origins get the trailing-slash form they expect; app deep links append
+    // the query directly to the scheme path.
+    const sep = target.startsWith('http') ? '/?' : '?'
+    return void res.redirect(`${target}${sep}connected=1&code=${encodeURIComponent(code)}`)
   }
 
   // Fallback (mobile / no frontend configured): show a "close this tab" page

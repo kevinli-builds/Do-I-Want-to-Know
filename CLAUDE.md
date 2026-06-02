@@ -245,6 +245,7 @@ SYNC_LOOKBACK_DAYS=1095              # Optional, how far back to scan Gmail (def
 SYNC_MAX_EMAILS=2000                 # Optional, max emails ingested per sync (default 2000)
 ACCESS_WEBHOOK_URL=https://...       # Optional, Discord/Slack incoming webhook — pinged on new access requests
 ADMIN_KEY=...                        # Optional, protects GET /access/requests (owner-only list)
+AUTH_ENFORCED=true                   # Optional kill-switch (default true). Set false/0 to disable session enforcement and fall back to legacy userId-based access WITHOUT a code rollback — emergency use only
 PORT=3000                            # Optional, defaults to 3000
 ```
 
@@ -256,6 +257,13 @@ NEXT_PUBLIC_API_URL=https://do-i-want-to-know.onrender.com   # Render backend UR
 ### App (`app/app.json` → `extra.apiUrl`) — legacy Expo mobile client
 Change `"apiUrl": "http://localhost:3000"` to your Render URL after deploying.
 The **web app (`web/`) is now the primary client**; the Expo app is kept but optional.
+The app authenticates with the same session model as the web client: OAuth opens
+via `WebBrowser.openAuthSessionAsync` with the app's deep link (`diwtkn://auth`,
+or `exp://…/--/auth` under Expo Go) as the return URL; the backend redirects the
+one-time code there, and the app trades it via `POST /auth/exchange` for a token
+stored in `expo-secure-store`. An axios interceptor attaches it as
+`Authorization: Bearer`. `safeRedirect` allowlists the `diwtkn://`/`exp://`
+schemes for this. Run `npx expo install expo-linking` if not already present.
 
 ---
 

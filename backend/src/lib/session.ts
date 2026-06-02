@@ -13,6 +13,14 @@ export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex')
 }
 
+// Kill-switch. Session auth is enforced by default. Set AUTH_ENFORCED=false (or
+// 0) on the server to instantly fall back to the legacy userId-based behavior —
+// no code rollback, no migration revert — if the auth rollout misbehaves in
+// production. A valid token is still honored when present; this only changes
+// what happens when one is ABSENT.
+export const AUTH_ENFORCED =
+  process.env.AUTH_ENFORCED !== 'false' && process.env.AUTH_ENFORCED !== '0'
+
 /** Mint a session for a user and return the raw token (only the hash is stored). */
 export async function createSession(userId: string): Promise<string> {
   const token = newToken()
@@ -44,15 +52,26 @@ declare global {
 // useless without the token. Handlers can read req.authUserId.
 export const requireSession: RequestHandler = async (req, res, next) => {
   const userId = await userIdFromRequest(req)
-  if (!userId) {
-    res.status(401).json({ error: 'Please reconnect Gmail to continue.', reauth: true })
-    return
-  }
   const claimed = (req.params?.userId ?? req.body?.userId) as string | undefined
-  if (claimed && claimed !== userId) {
-    res.status(403).json({ error: 'Forbidden' })
+
+  if (userId) {
+    // Valid token: it must match any userId the route also carries.
+    if (claimed && claimed !== userId) {
+      res.status(403).json({ error: 'Forbidden' })
+      return
+    }
+    req.authUserId = userId
+    next()
     return
   }
-  req.authUserId = userId
-  next()
+
+  // No valid token.
+  if (!AUTH_ENFORCED) {
+    // Rollback mode: trust the legacy userId in the route, as before sessions.
+    req.authUserId = claimed
+    next()
+    return
+  }
+
+  res.status(401).json({ error: 'Please reconnect Gmail to continue.', reauth: true })
 }
