@@ -69,6 +69,19 @@ model LedgerEntry {
   @@unique([userId, emailId])
 }
 
+// Every Gmail message the app has EXAMINED (sent to Claude), regardless of
+// whether it produced a LedgerEntry. This is the dedup source for /emails/sync:
+// keying off this — not off stored purchases — means non-relevant emails aren't
+// re-fetched/re-classified each pass, so a backfill always marches older and we
+// never re-bill Claude for the same mail.
+model ProcessedEmail {
+  userId    String
+  emailId   String
+  createdAt DateTime @default(now())
+
+  @@id([userId, emailId])
+}
+
 // Someone who isn't a test user yet asking to be added (Testing-mode access).
 model Acceptance {
   id        String   @id @default(cuid())

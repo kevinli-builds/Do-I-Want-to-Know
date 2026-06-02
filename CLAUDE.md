@@ -65,7 +65,8 @@ Do I Want To Know/
 │   │       ├── 20260530000000_unsubscribe/     Adds LedgerEntry.senderEmail + unsubscribe
 │   │       ├── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
 │       ├── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
-│       └── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
+│       ├── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
+│       └── 20260603000000_processed_emails/  Adds ProcessedEmail (examined-email dedup; backfilled from LedgerEntry)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -100,7 +101,7 @@ Do I Want To Know/
 8. User closes browser → `onConnected()` called → re-fetches user status → shows **WrappedScreen**
 9. User taps **"Sync Emails"** → `POST /emails/sync`:
    - Lists candidate message IDs over the lookback window (default 3 years, up to `SYNC_MAX_EMAILS`=2000) across purchase/promotions/charity queries
-   - Drops already-processed emailIds **before** fetching metadata (so repeat syncs only pull new mail)
+   - Drops emailIds already in `ProcessedEmail` (every email previously **examined**, not just stored purchases) **before** fetching metadata, so repeat syncs only pull genuinely new/unexamined mail and never re-classify non-relevant emails
    - Fetches metadata for new IDs in throttled batches (`gmail.ts`: `listEmailIds` + `fetchMetadataForIds`)
    - Sends new emails to Claude in batches of 25 for extraction (system prompt is cache-marked)
    - Persists structured `LedgerEntry` rows (vendor, category, amount, currency, date)
@@ -122,7 +123,7 @@ Do I Want To Know/
 - **No schema change** was needed — `User.email` was already `@unique`. Viewing/aggregation (`/wrapped`, `/export`) never calls Claude; only `/emails/sync` does.
 
 ### Rate limiting & progressive backfill
-- A sync pulls up to `maxEmails` UNprocessed emails (`listNewEmailIds` skips already-stored ids, pages newest→older), so repeated syncs walk progressively further back through history — a big backfill happens across passes, each bounded to `maxEmails`
+- A sync pulls up to `maxEmails` UNexamined emails (`listNewEmailIds` skips ids in `ProcessedEmail`, pages newest→older), so repeated syncs walk progressively further back through history — a big backfill happens across passes, each bounded to `maxEmails`. Newest-first ordering means new mail that arrived since the last sync is always picked up first; the `after:` window also slides with "now". Emails Claude classifies (record **or** explicit not-relevant) are recorded in `ProcessedEmail`; batch failures are left unrecorded so they retry next sync
 - `User.lastSyncedAt` is stamped **only when a sync is `caughtUp`** (stored 0 new, or pulled less than a full batch). So a productive backfill can run back-to-back; the cooldown only applies once caught up
 - `/emails/sync` rejects with 429 if cooling down within `SYNC_RATE_LIMIT_HOURS` (env, default 24; set `0` to disable). Bounds cost while letting users complete a backfill
 - The floating Sync button surfaces `caughtUp` as "✓ up to date" vs "more to load — keep syncing"
@@ -172,6 +173,13 @@ model AccessRequest {              // invite requests from non-test-users
   email     String   @unique
   note      String?
   createdAt DateTime @default(now())
+}
+
+model ProcessedEmail {            // every email EXAMINED by sync (not just stored purchases)
+  userId    String                // → dedup source for /emails/sync, so non-relevant mail isn't re-classified
+  emailId   String
+  createdAt DateTime @default(now())
+  @@id([userId, emailId])
 }
 
 model Acceptance {                 // vendors/senders the user marked "Accepted" (cross-device)

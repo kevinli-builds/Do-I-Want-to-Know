@@ -85,11 +85,11 @@ termMonths rule:
       const parsed: BatchResult = JSON.parse(jsonMatch?.[0] ?? '{}')
       batch.forEach((e, idx) => results.set(e.id, parsed[String(idx)] ?? null))
     } catch (err) {
-      // API error (rate limit after retries) or unparseable JSON: skip this
-      // batch so its emails are retried on the next sync, rather than failing
-      // the whole sync.
+      // API error (rate limit after retries) or unparseable JSON: leave this
+      // batch's ids OUT of the results map entirely, so they're neither stored
+      // nor marked processed — the next sync retries them. (Setting them to null
+      // would mean "examined, not relevant" and would wrongly mark them done.)
       console.error('[extractor] batch skipped:', (err as Error)?.message)
-      batch.forEach(e => results.set(e.id, null))
     }
 
     // Gentle pacing to ease Claude's per-minute token limit on big backfills

@@ -64,9 +64,11 @@ router.post('/sync', asyncHandler(async (req, res) => {
   // unhandled rejection would terminate the Node process and restart the
   // whole server (taking every other request down with it).
   try {
-    // 1. Pull the next batch of UNprocessed candidate IDs (skips already-stored
-    //    ones and pages newest → older), so successive syncs walk further back.
-    const existing = await prisma.ledgerEntry.findMany({
+    // 1. Pull the next batch of UNprocessed candidate IDs (skips every email we
+    //    have already EXAMINED — not just stored purchases — and pages newest →
+    //    older), so successive syncs always walk further back and we never
+    //    re-classify the same non-relevant mail.
+    const existing = await prisma.processedEmail.findMany({
       where: { userId },
       select: { emailId: true },
     })
@@ -119,11 +121,24 @@ router.post('/sync', asyncHandler(async (req, res) => {
       await prisma.ledgerEntry.createMany({ data: rows, skipDuplicates: true })
     }
 
-    // "Caught up" when we stored nothing new (incl. all batches skipped) OR
-    // pulled less than a full batch (reached the tail of available mail). Only
-    // then do we start the cooldown — so a productive backfill can continue
-    // back-to-back, while a finished/empty sync is rate-limited normally.
-    const caughtUp = rows.length === 0 || newIds.length < wantMax
+    // Mark every email Claude actually classified (a record OR an explicit
+    // "not relevant") as examined, so it's never fetched/classified again.
+    // Batch-failed ids are absent from `extracted`, so they stay unprocessed and
+    // get retried next sync.
+    const processedIds = Array.from(extracted.keys())
+    if (processedIds.length > 0) {
+      await prisma.processedEmail.createMany({
+        data: processedIds.map(emailId => ({ userId, emailId })),
+        skipDuplicates: true,
+      })
+    }
+
+    // "Caught up" when we pulled fewer than a full batch — i.e. we reached the
+    // tail of available unexamined mail. A full batch means there's likely more,
+    // so we keep the cooldown off and let the backfill continue back-to-back.
+    // (This no longer keys off how many became records — a full batch of
+    // non-relevant mail still means more history remains.)
+    const caughtUp = newIds.length < wantMax
     if (caughtUp) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
     }
