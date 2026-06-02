@@ -396,6 +396,52 @@ body {
   text-transform: capitalize;
 }
 
+/* ── Expandable Wrapped rows ────────────────────────────────── */
+.row-clickable {
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.row-clickable:hover { background: #faf9ff; }
+.chev {
+  display: inline-block;
+  color: var(--muted);
+  font-size: 10px;
+  margin-left: 7px;
+  vertical-align: middle;
+}
+.row-detail {
+  padding: 2px 0 12px;
+  border-bottom: 1px solid var(--border);
+}
+.detail-summary {
+  font-size: 13px;
+  color: var(--muted);
+  margin: 2px 0 8px;
+  word-break: break-word;
+}
+.detail-line {
+  padding: 9px 12px;
+  background: #faf9ff;
+  border-radius: 10px;
+  margin-bottom: 6px;
+}
+.detail-more {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 8px;
+}
+.detail-empty {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 0;
+}
+.detail-spin {
+  display: flex;
+  justify-content: center;
+  padding: 12px;
+}
+.detail-spin .spinner { width: 22px; height: 22px; border-width: 2px; }
+
 /* ── Unsubscribe helper ─────────────────────────────────────── */
 .spammer {
   border-bottom: 1px solid var(--border);

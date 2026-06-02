@@ -249,6 +249,7 @@ export default function Home() {
             onSelectYear={handleSelectYear}
             yearLoading={yearLoading}
             onOpenUnsubscribe={() => setView('unsubscribe')}
+            onOpenAudit={() => setView('audit')}
             onDisconnect={handleDisconnect}
           />
         ) : view === 'monitor' ? (
