@@ -176,8 +176,9 @@ export interface Transaction {
   date: string
   category: string
   vendor: string
-  amount: number | null
+  amount: number | null      // original amount, in `currency`
   currency: string
+  amountUsd: number | null   // normalized to USD (for totals + cross-currency sort)
   description: string
   emailId: string
   senderEmail: string | null

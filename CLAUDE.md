@@ -128,6 +128,11 @@ Do I Want To Know/
 - `/emails/sync` rejects with 429 if cooling down within `SYNC_RATE_LIMIT_HOURS` (env, default 24; set `0` to disable). Bounds cost while letting users complete a backfill
 - The floating Sync button surfaces `caughtUp` as "✓ up to date" vs "more to load — keep syncing"
 
+### Currency
+- `LedgerEntry` stores the **original** `amount` + `currency` (extractor infers the ISO code from the symbol/locale and never converts). The app reports in **USD**.
+- `lib/fx.ts` (`getUsdRates`, `toUsd`) converts to USD at **read time**: live rates from Frankfurter (keyless, ECB), cached 12h in-process, with a static fallback table if the fetch fails. No FX API key needed.
+- `computeStats` and `computeMonitor` normalize every amount to USD up front (one `.map` at the top), so all aggregates are single-currency. `/transactions` returns both `amount` (original, in `currency`) and `amountUsd`; the Audit + Wrapped detail views show the native amount with a "≈ $X" USD hint and sort/total by `amountUsd`. (Fixes foreign purchases — e.g. ¥10,000 — being summed as if USD.)
+
 ---
 
 ## Database Schema

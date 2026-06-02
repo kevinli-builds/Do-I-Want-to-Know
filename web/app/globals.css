@@ -441,6 +441,7 @@ body {
   padding: 12px;
 }
 .detail-spin .spinner { width: 22px; height: 22px; border-width: 2px; }
+.txn-usd { color: var(--muted); font-weight: 600; font-size: 12px; }
 
 /* ── Unsubscribe helper ─────────────────────────────────────── */
 .spammer {

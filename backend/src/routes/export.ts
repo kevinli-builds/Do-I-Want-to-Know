@@ -2,6 +2,7 @@ import { Router } from 'express'
 import ExcelJS from 'exceljs'
 import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
+import { getUsdRates } from '../lib/fx'
 import { CATEGORY_LABELS } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
@@ -48,7 +49,8 @@ router.get('/:userId', asyncHandler(async (req, res) => {
     where: { userId },
     orderBy: { date: 'desc' },
   })
-  const stats = entries.length > 0 ? computeStats(entries) : null
+  const rates = await getUsdRates()
+  const stats = entries.length > 0 ? computeStats(entries, rates) : null
 
   const wb = new ExcelJS.Workbook()
   wb.creator  = 'Do I Want To Know'

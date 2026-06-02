@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
+import { getUsdRates } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
 
@@ -43,13 +44,14 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   const year = Number.isInteger(yearParam) && availableYears.includes(yearParam) ? yearParam : null
   const scoped = year !== null ? entries.filter(e => e.date.getFullYear() === year) : entries
 
+  const rates = await getUsdRates()
   res.json({
     connected: true,
     email: user.email,
     totalEntries: scoped.length,
     year,
     availableYears,
-    stats: computeStats(scoped),
+    stats: computeStats(scoped, rates),
   })
 }))
 

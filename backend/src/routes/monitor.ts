@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { computeMonitor, type Period } from '../lib/monitor'
+import { getUsdRates } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
 
@@ -29,11 +30,12 @@ router.get('/:userId', asyncHandler(async (req, res) => {
     return void res.json({ connected: !!user.oauthToken, email: user.email, empty: true, period })
   }
 
+  const rates = await getUsdRates()
   res.json({
     connected: true,
     email: user.email,
     empty: false,
-    ...computeMonitor(entries, period),
+    ...computeMonitor(entries, period, rates),
   })
 }))
 

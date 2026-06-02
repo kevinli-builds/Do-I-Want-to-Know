@@ -3,8 +3,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
 
-const money = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+const money = (n: number, currency = 'USD') => {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: (currency || 'USD').toUpperCase() }).format(n)
+  } catch {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  }
+}
 
 const CATEGORY_EMOJI: Record<string, string> = {
   order: '📦', subscription: '🔁', travel: '✈️', food: '🍔',
@@ -68,7 +73,8 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
     })
     list = [...list].sort((a, b) =>
       sort === 'amount'
-        ? (b.amount ?? -1) - (a.amount ?? -1)
+        // Sort by the USD-normalized amount so currencies are comparable.
+        ? (b.amountUsd ?? b.amount ?? -1) - (a.amountUsd ?? a.amount ?? -1)
         : new Date(b.date).getTime() - new Date(a.date).getTime()
     )
     return list
@@ -148,7 +154,12 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
                       {CATEGORY_EMOJI[t.category] ?? '•'} {t.vendor}
                     </span>
                     <span className="txn-amount" style={t.category === 'refund' ? { color: '#0ea5e9' } : undefined}>
-                      {t.amount != null ? (t.category === 'refund' ? `+${money(t.amount)}` : money(t.amount)) : '—'}
+                      {t.amount != null
+                        ? `${t.category === 'refund' ? '+' : ''}${money(t.amount, t.currency)}`
+                        : '—'}
+                      {t.amount != null && t.currency && t.currency.toUpperCase() !== 'USD' && t.amountUsd != null && (
+                        <span className="txn-usd"> ≈ {money(t.amountUsd)}</span>
+                      )}
                     </span>
                   </div>
                   <div className="txn-desc">{t.description}</div>

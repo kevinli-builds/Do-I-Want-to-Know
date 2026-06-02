@@ -49,8 +49,8 @@ Respond ONLY with a JSON object mapping the email index (as a string) to either 
 {
   "category": "order" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "refund" | "other",
   "vendor": "<clean brand name, e.g. 'Amazon' not 'noreply@amazon.com'>",
-  "amount": <number or omit if unknown/not a financial transaction>,
-  "currency": "<ISO code, default USD>",
+  "amount": <number in the email's OWN currency — do NOT convert; omit if unknown/not a financial transaction>,
+  "currency": "<ISO 4217 code inferred from the symbol/locale: ¥→JPY, €→EUR, £→GBP, ₹→INR, ₩→KRW, A$→AUD, C$→CAD, R$→BRL, CHF, kr→SEK/NOK/DKK; default USD if no other currency is indicated>",
   "date": "<YYYY-MM-DD>",
   "description": "<one short line, e.g. 'Nike summer sale promo' or 'Donation to Red Cross'>",
   "termMonths": <number, ONLY if the charge explicitly covers a multi-month term paid upfront>

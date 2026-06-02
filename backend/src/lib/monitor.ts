@@ -4,6 +4,7 @@
 import type { LedgerEntry } from '@prisma/client'
 import { SPEND_CATEGORIES, type Category } from './categories'
 import { computeStats } from './stats'
+import { toUsd } from './fx'
 
 export type Period = 'month' | 'year'
 
@@ -125,7 +126,20 @@ export function computeAnalytics(entries: LedgerEntry[], now = new Date()): Moni
   }
 }
 
-export function computeMonitor(entries: LedgerEntry[], period: Period, now = new Date()): MonitorData {
+export function computeMonitor(
+  rawEntries: LedgerEntry[],
+  period: Period,
+  rates: Record<string, number> = { USD: 1 },
+  now = new Date(),
+): MonitorData {
+  // Normalize amounts to USD up front so every KPI, trend, and subscription
+  // figure below is single-currency.
+  const entries = rawEntries.map(e => ({
+    ...e,
+    amount: toUsd(e.amount, e.currency, rates),
+    currency: 'USD',
+  }))
+
   const curBase = periodBase(period, now, 'cur')
   const prevBase = periodBase(period, now, 'prev')
   const curEntries = entries.filter(e => inPeriod(e.date, period, curBase))

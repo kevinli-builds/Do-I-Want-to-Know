@@ -4,8 +4,15 @@ import { Fragment, useCallback, useState } from 'react'
 import { downloadExcel, getTransactions, gmailMessageUrl, type WrappedData, type Transaction } from '../lib/api'
 import { SpendChart } from './SpendChart'
 
-const money = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+// USD by default; pass a currency code to format a foreign amount (e.g. ¥, €).
+// Falls back to USD if the code is missing/invalid so it never throws.
+const money = (n: number, currency = 'USD') => {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: (currency || 'USD').toUpperCase() }).format(n)
+  } catch {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+  }
+}
 
 // Human-friendly labels + emoji for each category
 const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
@@ -133,7 +140,7 @@ export function WrappedView({
         {txnState === 'done' && txns && (() => {
           const items = txns.filter(filterFn)
           if (items.length === 0) return <div className="detail-empty">No matching records in this view.</div>
-          const total = items.reduce((sum, t) => sum + (t.amount ?? 0), 0)
+          const total = items.reduce((sum, t) => sum + (t.amountUsd ?? 0), 0)
           const shown = items.slice(0, 8)
           return (
             <>
@@ -144,7 +151,12 @@ export function WrappedView({
                 <div className="detail-line" key={t.id}>
                   <div className="txn-main">
                     <span className="txn-vendor">{t.vendor}</span>
-                    <span className="txn-amount">{t.amount != null ? money(t.amount) : '—'}</span>
+                    <span className="txn-amount">
+                      {t.amount != null ? money(t.amount, t.currency) : '—'}
+                      {t.amount != null && t.currency && t.currency.toUpperCase() !== 'USD' && t.amountUsd != null && (
+                        <span className="txn-usd"> ≈ {money(t.amountUsd)}</span>
+                      )}
+                    </span>
                   </div>
                   {t.description && <div className="txn-desc">{t.description}</div>}
                   <div className="txn-meta">
@@ -425,24 +437,30 @@ export function WrappedView({
                   in active subscriptions
                 </p>
               )}
-              {stats.subscriptionInsights.map((s) => (
-                <div className="row" key={s.vendor}>
-                  <span className="label" style={{ opacity: s.active ? 1 : 0.5 }}>
-                    {s.vendor}
-                    <span className="sub-meta">
-                      {s.cadence}
-                      {!s.active
-                        ? ' · no recent charge'
-                        : s.lastCharge
-                          ? ` · last ${shortDate(s.lastCharge)}`
-                          : ''}
-                    </span>
-                  </span>
-                  <span className="value">
-                    {s.monthlyEstimate > 0 ? `${money(s.monthlyEstimate)}/mo` : '—'}
-                  </span>
-                </div>
-              ))}
+              {stats.subscriptionInsights.map((s) => {
+                const key = `sub:${s.vendor}`
+                return (
+                  <Fragment key={s.vendor}>
+                    <div {...rowProps(key)}>
+                      <span className="label" style={{ opacity: s.active ? 1 : 0.5 }}>
+                        {s.vendor}{chev(key)}
+                        <span className="sub-meta">
+                          {s.cadence}
+                          {!s.active
+                            ? ' · no recent charge'
+                            : s.lastCharge
+                              ? ` · last ${shortDate(s.lastCharge)}`
+                              : ''}
+                        </span>
+                      </span>
+                      <span className="value">
+                        {s.monthlyEstimate > 0 ? `${money(s.monthlyEstimate)}/mo` : '—'}
+                      </span>
+                    </div>
+                    {renderDetail(key, t => inYear(t) && t.vendor === s.vendor && t.category === 'subscription')}
+                  </Fragment>
+                )
+              })}
               <p style={{ color: 'var(--muted)', fontSize: 11, marginTop: 12 }}>
                 Estimates inferred from email receipts — costs normalized to a monthly figure.
               </p>

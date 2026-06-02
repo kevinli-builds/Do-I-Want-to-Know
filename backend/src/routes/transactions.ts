@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
+import { getUsdRates, toUsd } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
 
@@ -20,14 +21,16 @@ router.get('/:userId', asyncHandler(async (req, res) => {
     orderBy: { date: 'desc' },
   })
 
+  const rates = await getUsdRates()
   res.json({
     transactions: entries.map(e => ({
       id: e.id,
       date: e.date,
       category: e.category,
       vendor: e.vendor,
-      amount: e.amount,
+      amount: e.amount,                          // original amount, in `currency`
       currency: e.currency,
+      amountUsd: toUsd(e.amount, e.currency, rates), // normalized to USD for totals/sorting
       description: e.description,
       emailId: e.emailId,
       senderEmail: e.senderEmail,
