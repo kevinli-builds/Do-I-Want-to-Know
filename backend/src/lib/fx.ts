@@ -51,3 +51,15 @@ export function toUsd(
   const rate = rates[cur]
   return rate ? amount * rate : amount
 }
+
+/**
+ * Return a copy of `entries` with every amount converted to USD (currency set
+ * to 'USD'). Aggregators call this once up front so all downstream math is
+ * single-currency. Generic over any row carrying `amount` + `currency`.
+ */
+export function normalizeToUsd<T extends { amount: number | null; currency: string }>(
+  entries: T[],
+  rates: Record<string, number>,
+): T[] {
+  return entries.map(e => ({ ...e, amount: toUsd(e.amount, e.currency, rates), currency: 'USD' }))
+}

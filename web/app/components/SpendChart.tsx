@@ -1,10 +1,9 @@
 'use client'
 
 import { LineChart } from './LineChart'
+import { moneyWhole as money } from '../lib/format'
 
 const MONTH_LABELS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-const money = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 
 /**
  * Renders monthlySpend (keyed "YYYY-MM") as a line chart.

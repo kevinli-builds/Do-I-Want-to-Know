@@ -2,6 +2,8 @@
 
 import { Fragment, useCallback, useState } from 'react'
 import { downloadExcel, getTransactions, gmailMessageUrl, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
+import { catLabel, catEmoji } from '../lib/categories'
+import { money } from '../lib/format'
 import { SpendChart } from './SpendChart'
 
 function monthLabel(m: string): string {
@@ -10,36 +12,6 @@ function monthLabel(m: string): string {
   return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
-
-// USD by default; pass a currency code to format a foreign amount (e.g. ¥, €).
-// Falls back to USD if the code is missing/invalid so it never throws.
-const money = (n: number, currency = 'USD') => {
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: (currency || 'USD').toUpperCase() }).format(n)
-  } catch {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-  }
-}
-
-// Human-friendly labels + emoji for each category
-const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
-  order:         { label: 'Online Orders',   emoji: '📦' },
-  clothes:       { label: 'Clothing',         emoji: '👕' },
-  subscription:  { label: 'Subscriptions',   emoji: '🔁' },
-  travel:        { label: 'Travel',           emoji: '✈️' },
-  food:          { label: 'Food & Delivery',  emoji: '🍔' },
-  entertainment: { label: 'Entertainment',   emoji: '🎬' },
-  charity:       { label: 'Donations',        emoji: '💝' },
-  marketing:     { label: 'Marketing Email',  emoji: '📣' },
-  other:         { label: 'Other',            emoji: '🧾' },
-}
-
-function categoryLabel(cat: string) {
-  return CATEGORY_META[cat]?.label ?? cat.charAt(0).toUpperCase() + cat.slice(1)
-}
-function categoryEmoji(cat: string) {
-  return CATEGORY_META[cat]?.emoji ?? '•'
-}
 
 function relativeTime(ts: number): string {
   const secs = Math.floor((Date.now() - ts) / 1000)
@@ -469,7 +441,7 @@ export function WrappedView({
                     <Fragment key={cat}>
                       <div {...rowProps(key)}>
                         <span className="label">
-                          {categoryEmoji(cat)} {categoryLabel(cat)}{chev(key)}
+                          {catEmoji(cat)} {catLabel(cat)}{chev(key)}
                         </span>
                         <span className="value" style={cat === 'refund' ? { color: '#0ea5e9' } : undefined}>
                           {info.count}

@@ -2,12 +2,8 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getMonitor, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
+import { money as moneyFull, moneyWhole as money } from '../lib/format'
 import { AnalyticsChart } from './AnalyticsChart'
-
-const money = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-const moneyFull = (n: number) =>
-  new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
 
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {

@@ -1,5 +1,7 @@
 'use client'
 
+import { moneyWhole } from '../lib/format'
+
 export interface LineSeries {
   name: string
   color: string
@@ -26,10 +28,7 @@ export function LineChart({
   const padT = 12
   const padB = 24
 
-  const fmt = (n: number) =>
-    format === 'money'
-      ? new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
-      : `${Math.round(n)}`
+  const fmt = (n: number) => (format === 'money' ? moneyWhole(n) : `${Math.round(n)}`)
 
   const max = Math.max(1, ...series.flatMap(s => s.values))
   const n = labels.length

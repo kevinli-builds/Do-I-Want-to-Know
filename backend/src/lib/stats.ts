@@ -3,7 +3,7 @@
 
 import type { LedgerEntry } from '@prisma/client'
 import { SPEND_CATEGORIES } from './categories'
-import { toUsd } from './fx'
+import { normalizeToUsd } from './fx'
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -184,11 +184,7 @@ export function computeStats(rawEntries: LedgerEntry[], rates: Record<string, nu
   // Normalize every amount to USD up front, so all downstream math (totals,
   // monthly spend, category breakdown, biggest purchase, subscription
   // estimates) is single-currency. The original rows are untouched.
-  const entries = rawEntries.map(e => ({
-    ...e,
-    amount: toUsd(e.amount, e.currency, rates),
-    currency: 'USD',
-  }))
+  const entries = normalizeToUsd(rawEntries, rates)
 
   const spendEntries     = entries.filter(e => SPEND_CATEGORIES.includes(e.category as any))
   const marketingEntries = entries.filter(e => e.category === 'marketing')

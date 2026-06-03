@@ -2,19 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
-
-const money = (n: number, currency = 'USD') => {
-  try {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: (currency || 'USD').toUpperCase() }).format(n)
-  } catch {
-    return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
-  }
-}
-
-const CATEGORY_EMOJI: Record<string, string> = {
-  order: '📦', clothes: '👕', subscription: '🔁', travel: '✈️', food: '🍔',
-  entertainment: '🎬', charity: '💝', marketing: '📣', refund: '↩️', other: '🧾',
-}
+import { catEmoji } from '../lib/categories'
+import { money } from '../lib/format'
 
 function fmtDate(iso: string): string {
   const d = new Date(iso)
@@ -130,7 +119,7 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
             <select className="audit-select" value={category} onChange={e => setCategory(e.target.value)}>
               <option value="all">All categories</option>
               {categories.map(c => (
-                <option key={c} value={c}>{CATEGORY_EMOJI[c] ?? '•'} {c}</option>
+                <option key={c} value={c}>{catEmoji(c)} {c}</option>
               ))}
             </select>
             <select className="audit-select" value={sort} onChange={e => setSort(e.target.value as 'recent' | 'amount')}>
@@ -151,7 +140,7 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
                 <div className="txn" key={t.id}>
                   <div className="txn-main">
                     <span className="txn-vendor">
-                      {CATEGORY_EMOJI[t.category] ?? '•'} {t.vendor}
+                      {catEmoji(t.category)} {t.vendor}
                     </span>
                     <span className="txn-amount" style={t.category === 'refund' ? { color: '#0ea5e9' } : undefined}>
                       {t.amount != null
