@@ -13,6 +13,9 @@ export interface ExtractedEntry {
   date: string       // ISO date string e.g. "2025-11-03"
   description: string
   termMonths?: number // months covered by an upfront charge (6-month plan → 6, annual → 12)
+  eventDate?: string  // future date: delivery ETA / departure / check-in / event, or promo expiry
+  promoCode?: string  // coupon/promo code (marketing)
+  discount?: string   // short offer text e.g. "20% off" (marketing)
 }
 
 type BatchResult = Record<string, ExtractedEntry | null>
@@ -53,7 +56,10 @@ Respond ONLY with a JSON object mapping the email index (as a string) to either 
   "currency": "<ISO 4217 code inferred from the symbol/locale: ¥→JPY, €→EUR, £→GBP, ₹→INR, ₩→KRW, A$→AUD, C$→CAD, R$→BRL, CHF, kr→SEK/NOK/DKK; default USD if no other currency is indicated>",
   "date": "<YYYY-MM-DD>",
   "description": "<one short line, e.g. 'Nike summer sale promo' or 'Donation to Red Cross'>",
-  "termMonths": <number, ONLY if the charge explicitly covers a multi-month term paid upfront>
+  "termMonths": <number, ONLY if the charge explicitly covers a multi-month term paid upfront>,
+  "eventDate": "<YYYY-MM-DD, ONLY if the email states a future date: a delivery/arrival estimate, flight departure, hotel check-in, event/ticket date, OR (for marketing) the offer's expiry. Omit if none.>",
+  "promoCode": "<the coupon/promo code to enter at checkout, e.g. 'SAVE20', ONLY if one is shown; omit otherwise>",
+  "discount": "<short offer text, e.g. '20% off' or '$15 off $50', ONLY for a promotional offer; omit otherwise>"
 }
 
 Category guide:
@@ -75,6 +81,10 @@ Key rules:
 - A refund / return / money-back / credit email is "refund", NOT "order" — even if it's from a store. Only classify as a purchase when money went OUT.
 - Charity thank-you / receipt emails ARE charity, not marketing
 - If unsure between marketing and null, pick marketing for any brand promotional email
+
+eventDate / promo rules:
+- eventDate is a FUTURE-relevant date pulled from the email text when present: "arriving Jun 5", "departs Aug 12", "check-in Sep 1", "event on Oct 3" → that date. For a marketing/promo email, eventDate is the offer EXPIRY ("ends Sunday", "valid through 6/30"). Resolve relative dates (e.g. "Sunday") against the email Date when you can; otherwise omit. Omit entirely if no such date is stated.
+- promoCode + discount apply to marketing/promo emails only: extract the literal code and a short offer description when shown. Omit when not a promo.
 
 termMonths rule:
 - Set termMonths ONLY when a single charge clearly covers a fixed multi-month term paid upfront, e.g. "6-month plan" → 6, "annual"/"1-year"/"yearly" → 12, "quarterly"/"3 months" → 3, "biannual"/"2 years" → 24.

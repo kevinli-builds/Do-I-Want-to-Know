@@ -21,6 +21,14 @@ function formatWait(minutes: number): string {
   return `${hours}h ${rem}m`
 }
 
+// Parse an optional date, returning null if absent/invalid (unlike safeDate,
+// which falls back to now). Used for the optional eventDate field.
+function optionalDate(s: string | undefined): Date | null {
+  if (!s) return null
+  const d = new Date(s)
+  return isNaN(d.getTime()) ? null : d
+}
+
 // Return the first parseable date among candidates, else now — prevents an
 // "Invalid Date" from Claude's output blowing up the createMany insert.
 function safeDate(...candidates: (string | undefined)[]): Date {
@@ -114,6 +122,9 @@ router.post('/sync', asyncHandler(async (req, res) => {
           senderEmail: rawById.get(emailId)?.senderEmail ?? null,
           unsubscribe: rawById.get(emailId)?.unsubscribe ?? null,
           termMonths: Number.isFinite(term) && term > 1 ? Math.round(term) : null,
+          eventDate: optionalDate(entry.eventDate),
+          promoCode: entry.promoCode ? String(entry.promoCode).slice(0, 40) : null,
+          discount: entry.discount ? String(entry.discount).slice(0, 80) : null,
         }
       })
 

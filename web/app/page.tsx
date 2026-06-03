@@ -9,6 +9,8 @@ import { WrappedView } from './components/WrappedView'
 import { MonitorView } from './components/MonitorView'
 import { TransactionsView } from './components/TransactionsView'
 import { UnsubscribeView } from './components/UnsubscribeView'
+import { PromotionsView } from './components/PromotionsView'
+import { UpcomingFloater } from './components/UpcomingFloater'
 
 function fmtMonthYear(iso: string | null): string {
   if (!iso) return ''
@@ -24,7 +26,7 @@ export default function Home() {
   const [loading,   setLoading]   = useState(true)
   const [scope,        setScope]        = useState<WrappedScope>({ mode: 'total' })
   const [scopeLoading, setScopeLoading] = useState(false)
-  const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'unsubscribe'>('wrapped')
+  const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'promotions' | 'unsubscribe'>('wrapped')
   // Global sync state (the floating button works on every tab)
   const [syncing, setSyncing] = useState(false)
   const [syncNotice, setSyncNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
@@ -234,6 +236,12 @@ export default function Home() {
             Audit
           </button>
           <button
+            className={`view-tab${view === 'promotions' ? ' active' : ''}`}
+            onClick={() => setView('promotions')}
+          >
+            Promotions
+          </button>
+          <button
             className={`view-tab${view === 'unsubscribe' ? ' active' : ''}`}
             onClick={() => setView('unsubscribe')}
           >
@@ -256,9 +264,14 @@ export default function Home() {
           <MonitorView userId={userId} refreshKey={refreshKey} />
         ) : view === 'audit' ? (
           <TransactionsView userId={userId} refreshKey={refreshKey} />
+        ) : view === 'promotions' ? (
+          <PromotionsView userId={userId} refreshKey={refreshKey} />
         ) : (
           <UnsubscribeView userId={userId} refreshKey={refreshKey} />
         )}
+
+        {/* Upcoming deliveries / flights / events — top-right floater */}
+        <UpcomingFloater userId={userId} refreshKey={refreshKey} />
 
         {/* Floating sync — available on every tab */}
         <div className="fab-wrap no-print">

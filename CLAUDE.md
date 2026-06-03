@@ -66,7 +66,8 @@ Do I Want To Know/
 │   │       ├── 20260530100000_access_requests/ Adds AccessRequest table (invite requests)
 │       ├── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
 │       ├── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
-│       └── 20260603000000_processed_emails/  Adds ProcessedEmail (examined-email dedup; backfilled from LedgerEntry)
+│       ├── 20260603000000_processed_emails/  Adds ProcessedEmail (examined-email dedup; backfilled from LedgerEntry)
+│       └── 20260604000000_upcoming_promos/    Adds LedgerEntry.eventDate + promoCode + discount
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -169,6 +170,9 @@ model LedgerEntry {
   senderEmail String?  // parsed From address — powers the unsubscribe helper
   unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
   termMonths  Int?     // months an upfront charge covers (6 = 6-month plan) — amortized to monthly
+  eventDate   DateTime? // future date: delivery ETA / departure / check-in / event (powers Upcoming); for marketing = promo expiry
+  promoCode   String?  // coupon/promo code (marketing) — surfaced in the Promotions tab
+  discount    String?  // short offer text, e.g. "20% off" (marketing)
   createdAt   DateTime @default(now())
   @@unique([userId, emailId])
 }
@@ -238,6 +242,8 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
 | GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId`, for the Audit view + Gmail deep links |
+| GET | `/upcoming/:userId` | Future-dated non-promo events (`eventDate` ≥ today: deliveries, flights, check-ins, tickets), soonest first — powers the Upcoming floater |
+| GET | `/promotions/:userId` | Active marketing offers (have a promo code, discount, or future expiry; expired ones dropped), soonest-expiry first — powers the Promotions tab |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
 | POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |

@@ -64,6 +64,12 @@ model LedgerEntry {
   senderEmail String?  // parsed From address (for the unsubscribe helper)
   unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
   termMonths  Int?     // if the charge covers a multi-month term (e.g. 6 = 6-month plan)
+  // The actionable FUTURE date for this entry, semantics per category:
+  //   order/travel/food/entertainment → delivery ETA / departure / check-in / event date
+  //   marketing                       → promo expiry
+  eventDate   DateTime? // powers the Upcoming floater + promo expiry
+  promoCode   String?   // coupon/promo code to use at checkout (marketing)
+  discount    String?   // short offer text, e.g. "20% off" (marketing)
   createdAt   DateTime @default(now())
 
   @@unique([userId, emailId])

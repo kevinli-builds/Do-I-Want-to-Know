@@ -218,6 +218,43 @@ export function gmailMessageUrl(emailId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${emailId}`
 }
 
+// ── Upcoming events (deliveries, flights, check-ins, tickets) ───────────────
+export interface UpcomingItem {
+  id: string
+  category: string
+  vendor: string
+  description: string
+  eventDate: string
+  emailId: string
+}
+
+export async function getUpcoming(userId: string): Promise<UpcomingItem[]> {
+  const res = await authedFetch(`${API}/upcoming/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Could not load upcoming')
+  const data = await res.json()
+  return data.upcoming ?? []
+}
+
+// ── Promotions (active discounts + promo codes) ─────────────────────────────
+export interface Promotion {
+  id: string
+  vendor: string
+  description: string
+  promoCode: string | null
+  discount: string | null
+  expiresAt: string | null
+  senderEmail: string | null
+  unsubscribe: string | null
+  emailId: string
+}
+
+export async function getPromotions(userId: string): Promise<Promotion[]> {
+  const res = await authedFetch(`${API}/promotions/${encodeURIComponent(userId)}`)
+  if (!res.ok) throw new Error('Could not load promotions')
+  const data = await res.json()
+  return data.promotions ?? []
+}
+
 // ── Accepted tags (cross-device) ───────────────────────────────────────────
 export async function getAcceptances(userId: string): Promise<string[]> {
   const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`)
