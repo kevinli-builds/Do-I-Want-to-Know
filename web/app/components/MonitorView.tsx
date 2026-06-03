@@ -1,9 +1,14 @@
 'use client'
 
-import { useCallback, useEffect, useState } from 'react'
-import { getMonitor, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
+import { Fragment, useCallback, useEffect, useState } from 'react'
+import { getMonitor, getTransactions, gmailMessageUrl, type MonitorData, type KpiPair, type TrendChange, type Transaction } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
 import { AnalyticsChart } from './AnalyticsChart'
+
+const fmtDate = (iso: string) => {
+  const d = new Date(iso)
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+}
 
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {
@@ -61,6 +66,28 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(false)
 
+  // Expandable Top-Senders drilldown — lazy-load the txn list once (like Wrapped).
+  const [txns, setTxns] = useState<Transaction[] | null>(null)
+  const [txnState, setTxnState] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
+  const [open, setOpen] = useState<Set<string>>(new Set())
+
+  const ensureTxns = useCallback(async () => {
+    if (txnState === 'loading' || txnState === 'done') return
+    setTxnState('loading')
+    try { setTxns(await getTransactions(userId)); setTxnState('done') }
+    catch { setTxnState('error') }
+  }, [txnState, userId])
+
+  const toggleSender = useCallback((vendor: string) => {
+    setOpen(prev => {
+      const next = new Set(prev)
+      if (next.has(vendor)) next.delete(vendor)
+      else next.add(vendor)
+      return next
+    })
+    void ensureTxns()
+  }, [ensureTxns])
+
   const load = useCallback(async (p: 'month' | 'year') => {
     setLoading(true)
     setError(false)
@@ -115,6 +142,49 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
 
   const k = data.kpis
   const subs = data.subscriptions!
+
+  // The expandable panel under a Top-Senders row: that sender's recent emails.
+  function renderSenderDetail(vendor: string) {
+    if (!open.has(vendor)) return null
+    return (
+      <div className="row-detail">
+        {txnState === 'loading' && <div className="detail-spin"><div className="spinner" /></div>}
+        {txnState === 'error' && (
+          <div className="detail-empty">
+            Couldn’t load details. <button className="link-btn" onClick={() => { setTxnState('idle'); void ensureTxns() }}>Retry</button>
+          </div>
+        )}
+        {txnState === 'done' && txns && (() => {
+          const items = txns.filter(t => t.category === 'marketing' && t.vendor === vendor)
+          if (items.length === 0) return <div className="detail-empty">No recent emails found for this sender.</div>
+          const first = items[0]
+          const shown = items.slice(0, 8)
+          return (
+            <>
+              {(first.senderEmail || first.unsubscribe) && (
+                <div className="detail-summary">
+                  {first.senderEmail ?? 'sender unknown'}
+                  {first.unsubscribe && (
+                    <> · <a className="txn-link" href={first.unsubscribe} target="_blank" rel="noopener noreferrer">Unsubscribe ↗</a></>
+                  )}
+                </div>
+              )}
+              {shown.map(t => (
+                <div className="detail-line" key={t.id}>
+                  <div className="txn-desc" style={{ margin: 0 }}>{t.description || '(no subject)'}</div>
+                  <div className="txn-meta">
+                    <span>{fmtDate(t.date)}</span>
+                    <a className="txn-link" href={gmailMessageUrl(t.emailId)} target="_blank" rel="noopener noreferrer">View email ↗</a>
+                  </div>
+                </div>
+              ))}
+              {items.length > shown.length && <div className="detail-more">+ {items.length - shown.length} more</div>}
+            </>
+          )
+        })()}
+      </div>
+    )
+  }
 
   return (
     <div className="shell monitor">
@@ -201,17 +271,29 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
           {data.topSenders.map((s, i) => {
             const diff = s.count - s.prevCount
             return (
-              <div className="row" key={s.vendor}>
-                <span className="label"><span className="rank">{i + 1}</span>{s.vendor}</span>
-                <span className="value">
-                  {s.count}
-                  {diff !== 0 && (
-                    <span className={diff > 0 ? 'delta delta-up' : 'delta delta-down'} style={{ marginLeft: 8 }}>
-                      {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}
-                    </span>
-                  )}
-                </span>
-              </div>
+              <Fragment key={s.vendor}>
+                <div
+                  className="row row-clickable"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => toggleSender(s.vendor)}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleSender(s.vendor) } }}
+                >
+                  <span className="label">
+                    <span className="rank">{i + 1}</span>{s.vendor}
+                    <span className="chev">{open.has(s.vendor) ? '▾' : '▸'}</span>
+                  </span>
+                  <span className="value">
+                    {s.count}
+                    {diff !== 0 && (
+                      <span className={diff > 0 ? 'delta delta-up' : 'delta delta-down'} style={{ marginLeft: 8 }}>
+                        {diff > 0 ? '▲' : '▼'} {Math.abs(diff)}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                {renderSenderDetail(s.vendor)}
+              </Fragment>
             )
           })}
         </div>
