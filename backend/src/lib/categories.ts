@@ -2,6 +2,7 @@
 
 export const CATEGORIES = [
   'order',
+  'clothes',
   'subscription',
   'travel',
   'food',
@@ -17,6 +18,7 @@ export type Category = (typeof CATEGORIES)[number]
 /** Categories that represent real financial spend (marketing is excluded). */
 export const SPEND_CATEGORIES: Category[] = [
   'order',
+  'clothes',
   'subscription',
   'travel',
   'food',
@@ -26,6 +28,7 @@ export const SPEND_CATEGORIES: Category[] = [
 
 export const CATEGORY_LABELS: Record<Category, string> = {
   order:         'Online Orders',
+  clothes:       'Clothing',
   subscription:  'Subscriptions',
   travel:        'Travel',
   food:          'Food & Delivery',

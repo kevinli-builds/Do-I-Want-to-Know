@@ -24,6 +24,7 @@ const money = (n: number, currency = 'USD') => {
 // Human-friendly labels + emoji for each category
 const CATEGORY_META: Record<string, { label: string; emoji: string }> = {
   order:         { label: 'Online Orders',   emoji: '📦' },
+  clothes:       { label: 'Clothing',         emoji: '👕' },
   subscription:  { label: 'Subscriptions',   emoji: '🔁' },
   travel:        { label: 'Travel',           emoji: '✈️' },
   food:          { label: 'Food & Delivery',  emoji: '🍔' },

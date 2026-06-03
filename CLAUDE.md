@@ -159,7 +159,7 @@ model OAuthToken {
 model LedgerEntry {
   id          String   @id @default(cuid())
   userId      String
-  category    String   // order | subscription | travel | food | entertainment | charity | marketing | refund | other (refund = money back, nets against spend)
+  category    String   // order | clothes | subscription | travel | food | entertainment | charity | marketing | refund | other (refund = money back, nets against spend)
   vendor      String
   amount      Float?
   currency    String   @default("USD")

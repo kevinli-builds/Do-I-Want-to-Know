@@ -12,7 +12,7 @@ const money = (n: number, currency = 'USD') => {
 }
 
 const CATEGORY_EMOJI: Record<string, string> = {
-  order: '📦', subscription: '🔁', travel: '✈️', food: '🍔',
+  order: '📦', clothes: '👕', subscription: '🔁', travel: '✈️', food: '🍔',
   entertainment: '🎬', charity: '💝', marketing: '📣', refund: '↩️', other: '🧾',
 }
 
