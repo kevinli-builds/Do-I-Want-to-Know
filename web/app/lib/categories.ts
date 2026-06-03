@@ -2,6 +2,7 @@
 export const CATEGORY_META: Record<string, { label: string; emoji: string; color: string }> = {
   order:         { label: 'Online Orders',  emoji: '📦', color: '#6c63ff' },
   clothes:       { label: 'Clothing',        emoji: '👕', color: '#d98c2b' },
+  shipping:      { label: 'Shipping Updates', emoji: '🚚', color: '#5b8def' },
   subscription:  { label: 'Subscriptions',  emoji: '🔁', color: '#e0518a' },
   travel:        { label: 'Travel',          emoji: '✈️', color: '#1aa3b8' },
   food:          { label: 'Food & Delivery', emoji: '🍔', color: '#f0913a' },

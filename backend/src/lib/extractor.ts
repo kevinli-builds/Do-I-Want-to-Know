@@ -50,7 +50,7 @@ For every other email, return a structured object.
 
 Respond ONLY with a JSON object mapping the email index (as a string) to either null or:
 {
-  "category": "order" | "clothes" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "refund" | "other",
+  "category": "order" | "clothes" | "shipping" | "subscription" | "travel" | "food" | "entertainment" | "charity" | "marketing" | "refund" | "other",
   "vendor": "<clean brand name, e.g. 'Amazon' not 'noreply@amazon.com'>",
   "amount": <number in the email's OWN currency — do NOT convert; omit if unknown/not a financial transaction>,
   "currency": "<ISO 4217 code inferred from the symbol/locale: ¥→JPY, €→EUR, £→GBP, ₹→INR, ₩→KRW, A$→AUD, C$→CAD, R$→BRL, CHF, kr→SEK/NOK/DKK; default USD if no other currency is indicated>",
@@ -65,6 +65,7 @@ Respond ONLY with a JSON object mapping the email index (as a string) to either 
 Category guide:
 - order: physical or digital product purchase that ISN'T clothing (Amazon, eBay, Best Buy, Etsy, electronics, home goods, etc.)
 - clothes: apparel, footwear, and fashion accessories (Nike, Zara, H&M, Uniqlo, Lululemon, shoes, jackets, a clothing order from any retailer, etc.)
+- shipping: a shipping/delivery STATUS update for an order already placed ("your order has shipped", "out for delivery", "delivered", "tracking update", "arriving Tuesday"). This is a notification, NOT a new purchase — omit amount. If a future delivery date is stated, set eventDate to it.
 - subscription: recurring service charge (Netflix, Spotify, iCloud, gym, SaaS, etc.)
 - travel: flights, hotels, car rentals, rideshare (Uber, Lyft, Airbnb, etc.)
 - food: restaurants, food delivery (Uber Eats, DoorDash, Grubhub, etc.)
@@ -78,6 +79,7 @@ Key rules:
 - "marketing" is for bulk/promotional email from businesses (newsletters, flash sales, "we miss you", coupon codes, etc.)
 - Real purchase receipts or order confirmations are NEVER marketing — classify them by type (order, clothes, food, etc.)
 - A purchase of apparel/footwear/fashion is "clothes", not "order" — even from a general retailer like Amazon (e.g. a t-shirt order → clothes)
+- A shipping/delivery/tracking status update is "shipping", NEVER "order". It refers to an order already placed, so counting it as a purchase would double-count one order across its "ordered" / "shipped" / "delivered" emails. Only the ORIGINAL order confirmation or receipt (the one that represents the actual purchase/charge) is "order" (or "clothes"); every later status update for that same order is "shipping".
 - A refund / return / money-back / credit email is "refund", NOT "order" — even if it's from a store. Only classify as a purchase when money went OUT.
 - Charity thank-you / receipt emails ARE charity, not marketing
 - If unsure between marketing and null, pick marketing for any brand promotional email

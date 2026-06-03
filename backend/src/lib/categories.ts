@@ -3,6 +3,7 @@
 export const CATEGORIES = [
   'order',
   'clothes',
+  'shipping',
   'subscription',
   'travel',
   'food',
@@ -29,6 +30,7 @@ export const SPEND_CATEGORIES: Category[] = [
 export const CATEGORY_LABELS: Record<Category, string> = {
   order:         'Online Orders',
   clothes:       'Clothing',
+  shipping:      'Shipping Updates',
   subscription:  'Subscriptions',
   travel:        'Travel',
   food:          'Food & Delivery',

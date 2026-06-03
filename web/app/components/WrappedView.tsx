@@ -356,7 +356,7 @@ export function WrappedView({
                         {v.count} order{v.count === 1 ? '' : 's'}
                       </span>
                     </div>
-                    {renderDetail(key, t => inScope(t) && t.vendor === v.vendor && t.category !== 'marketing')}
+                    {renderDetail(key, t => inScope(t) && t.vendor === v.vendor && !['marketing', 'shipping', 'refund'].includes(t.category))}
                   </Fragment>
                 )
               })}
