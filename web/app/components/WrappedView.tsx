@@ -1,8 +1,15 @@
 'use client'
 
 import { Fragment, useCallback, useState } from 'react'
-import { downloadExcel, getTransactions, gmailMessageUrl, type WrappedData, type Transaction } from '../lib/api'
+import { downloadExcel, getTransactions, gmailMessageUrl, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
 import { SpendChart } from './SpendChart'
+
+function monthLabel(m: string): string {
+  const [y, mo] = m.split('-').map(Number)
+  if (!y || !mo) return m
+  return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+}
+const todayISO = () => new Date().toISOString().slice(0, 10)
 
 // USD by default; pass a currency code to format a foreign amount (e.g. ¥, €).
 // Falls back to USD if the code is missing/invalid so it never throws.
@@ -60,9 +67,9 @@ export function WrappedView({
   userId,
   data,
   cachedAt,
-  selectedYear,
-  onSelectYear,
-  yearLoading = false,
+  scopeLoading = false,
+  scope,
+  onScopeChange,
   onOpenUnsubscribe,
   onOpenAudit,
   onDisconnect,
@@ -70,9 +77,9 @@ export function WrappedView({
   userId: string
   data: WrappedData
   cachedAt?: number | null
-  selectedYear: number | null
-  onSelectYear: (year: number | null) => void
-  yearLoading?: boolean
+  scope: WrappedScope
+  onScopeChange: (scope: WrappedScope) => void
+  scopeLoading?: boolean
   onOpenUnsubscribe?: () => void
   onOpenAudit?: () => void
   onDisconnect?: () => void
@@ -82,6 +89,22 @@ export function WrappedView({
   // Summary counts for the hero grid
   const marketingCount = stats?.byCategory?.marketing?.count ?? 0
   const charityCount   = stats?.charities?.length ?? 0
+
+  // ── Scope picker (Total / Yearly / Monthly / Custom window) ────────────────
+  const availableYears = data.availableYears ?? []
+  const availableMonths = data.availableMonths ?? []
+  const earliestMonth = availableMonths.length ? availableMonths[availableMonths.length - 1] : null
+  const [customOpen, setCustomOpen] = useState(false)
+  const [customFrom, setCustomFrom] = useState(earliestMonth ? `${earliestMonth}-01` : '')
+  const [customTo, setCustomTo] = useState(todayISO())
+
+  const scopeLabel = () => {
+    if (scope.mode === 'year') return ` · ${scope.year}`
+    if (scope.mode === 'month') return ` · ${monthLabel(scope.month)}`
+    if (scope.mode === 'custom') return ` · ${scope.from} → ${scope.to}`
+    return ''
+  }
+  const segCls = (m: WrappedScope['mode']) => `seg-btn${scope.mode === m && !customOpen ? ' active' : ''}`
 
   // ── Expandable row details (lazy-load the full transaction list once) ──────
   const [txns, setTxns] = useState<Transaction[] | null>(null)
@@ -109,9 +132,21 @@ export function WrappedView({
     void ensureTxns()
   }, [ensureTxns])
 
-  // Detail rows respect the active year filter so they match the row's numbers.
-  const inYear = (t: Transaction) =>
-    selectedYear == null || new Date(t.date).getFullYear() === selectedYear
+  // Detail rows respect the active scope so they match the row's numbers.
+  const inScope = (t: Transaction) => {
+    const d = new Date(t.date)
+    if (scope.mode === 'year') return d.getFullYear() === scope.year
+    if (scope.mode === 'month') {
+      const [y, m] = scope.month.split('-').map(Number)
+      return d.getFullYear() === y && d.getMonth() + 1 === m
+    }
+    if (scope.mode === 'custom') {
+      const from = new Date(scope.from)
+      const to = new Date(scope.to); to.setHours(23, 59, 59, 999)
+      return d >= from && d <= to
+    }
+    return true // total
+  }
 
   const rowProps = (key: string) => ({
     className: 'row row-clickable',
@@ -204,25 +239,45 @@ export function WrappedView({
         </div>
       </div>
 
-      {(data.availableYears?.length ?? 0) > 1 && (
-        <div className="year-toggle">
-          <button
-            className={`year-btn${selectedYear === null ? ' active' : ''}`}
-            onClick={() => onSelectYear(null)}
-            disabled={yearLoading}
-          >
-            All time
-          </button>
-          {data.availableYears.map((y) => (
-            <button
-              key={y}
-              className={`year-btn${selectedYear === y ? ' active' : ''}`}
-              onClick={() => onSelectYear(y)}
-              disabled={yearLoading}
-            >
-              {y}
-            </button>
-          ))}
+      {stats && (
+        <div className="scope no-print">
+          <div className="seg scope-seg">
+            <button className={segCls('total')} disabled={scopeLoading}
+              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'total' }) }}>Total</button>
+            <button className={segCls('year')} disabled={scopeLoading || availableYears.length === 0}
+              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'year', year: scope.mode === 'year' ? scope.year : availableYears[0] }) }}>Yearly</button>
+            <button className={segCls('month')} disabled={scopeLoading || availableMonths.length === 0}
+              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'month', month: scope.mode === 'month' ? scope.month : availableMonths[0] }) }}>Monthly</button>
+            <button className={`seg-btn${scope.mode === 'custom' || customOpen ? ' active' : ''}`} disabled={scopeLoading}
+              onClick={() => setCustomOpen(true)}>Custom</button>
+          </div>
+
+          {scope.mode === 'year' && !customOpen && (
+            <div className="scope-options">
+              {availableYears.map((y) => (
+                <button key={y} className={`year-btn${scope.mode === 'year' && scope.year === y ? ' active' : ''}`}
+                  disabled={scopeLoading} onClick={() => onScopeChange({ mode: 'year', year: y })}>{y}</button>
+              ))}
+            </div>
+          )}
+
+          {scope.mode === 'month' && !customOpen && (
+            <div className="scope-options">
+              <select className="audit-select" value={scope.month} disabled={scopeLoading}
+                onChange={(e) => onScopeChange({ mode: 'month', month: e.target.value })}>
+                {availableMonths.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
+              </select>
+            </div>
+          )}
+
+          {customOpen && (
+            <div className="scope-options scope-custom">
+              <label>From <input type="date" value={customFrom} max={customTo || todayISO()} onChange={(e) => setCustomFrom(e.target.value)} /></label>
+              <label>To <input type="date" value={customTo} min={customFrom} max={todayISO()} onChange={(e) => setCustomTo(e.target.value)} /></label>
+              <button className="btn btn-outline" disabled={scopeLoading || !customFrom || !customTo || customFrom > customTo}
+                onClick={() => onScopeChange({ mode: 'custom', from: customFrom, to: customTo })}>Apply</button>
+            </div>
+          )}
         </div>
       )}
 
@@ -238,7 +293,7 @@ export function WrappedView({
         <>
           {/* ── Hero: Total Spend (net of refunds) ──────────────────── */}
           <div className="card hero">
-            <h2>Net Spend{selectedYear ? ` · ${selectedYear}` : ''}</h2>
+            <h2>Net Spend{scopeLabel()}</h2>
             <div className="big">{money(stats.totalSpend)}</div>
             <div className="sub">
               across {data.totalEntries} tracked emails
@@ -247,7 +302,7 @@ export function WrappedView({
           </div>
 
           {/* ── Spend Over Time chart ──────────────────────────────── */}
-          <SpendChart monthlySpend={stats.monthlySpend} year={selectedYear} />
+          <SpendChart monthlySpend={stats.monthlySpend} year={scope.mode === 'year' ? scope.year : null} />
 
           {/* ── Stats Grid ─────────────────────────────────────────── */}
           <div className="grid">
@@ -328,7 +383,7 @@ export function WrappedView({
                         {v.count} order{v.count === 1 ? '' : 's'}
                       </span>
                     </div>
-                    {renderDetail(key, t => inYear(t) && t.vendor === v.vendor && t.category !== 'marketing')}
+                    {renderDetail(key, t => inScope(t) && t.vendor === v.vendor && t.category !== 'marketing')}
                   </Fragment>
                 )
               })}
@@ -363,7 +418,7 @@ export function WrappedView({
                         {s.count} email{s.count === 1 ? '' : 's'}
                       </span>
                     </div>
-                    {renderDetail(key, t => inYear(t) && t.vendor === s.vendor && t.category === 'marketing', extra)}
+                    {renderDetail(key, t => inScope(t) && t.vendor === s.vendor && t.category === 'marketing', extra)}
                   </Fragment>
                 )
               })}
@@ -394,7 +449,7 @@ export function WrappedView({
                         {c.total > 0 ? money(c.total) : `${c.count} email${c.count === 1 ? '' : 's'}`}
                       </span>
                     </div>
-                    {renderDetail(key, t => inYear(t) && t.vendor === c.vendor && t.category === 'charity')}
+                    {renderDetail(key, t => inScope(t) && t.vendor === c.vendor && t.category === 'charity')}
                   </Fragment>
                 )
               })}
@@ -420,7 +475,7 @@ export function WrappedView({
                           {info.spend > 0 ? ` · ${cat === 'refund' ? '−' : ''}${money(info.spend)}` : ''}
                         </span>
                       </div>
-                      {renderDetail(key, t => inYear(t) && t.category === cat)}
+                      {renderDetail(key, t => inScope(t) && t.category === cat)}
                     </Fragment>
                   )
                 })}
@@ -457,7 +512,7 @@ export function WrappedView({
                         {s.monthlyEstimate > 0 ? `${money(s.monthlyEstimate)}/mo` : '—'}
                       </span>
                     </div>
-                    {renderDetail(key, t => inYear(t) && t.vendor === s.vendor && t.category === 'subscription')}
+                    {renderDetail(key, t => inScope(t) && t.vendor === s.vendor && t.category === 'subscription')}
                   </Fragment>
                 )
               })}

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, ReauthError, type WrappedData } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
@@ -22,8 +22,8 @@ export default function Home() {
   const [wrapped,   setWrapped]   = useState<WrappedData | null>(null)
   const [cachedAt,  setCachedAt]  = useState<number | null>(null)
   const [loading,   setLoading]   = useState(true)
-  const [selectedYear, setSelectedYear] = useState<number | null>(null)
-  const [yearLoading,  setYearLoading]  = useState(false)
+  const [scope,        setScope]        = useState<WrappedScope>({ mode: 'total' })
+  const [scopeLoading, setScopeLoading] = useState(false)
   const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'unsubscribe'>('wrapped')
   // Global sync state (the floating button works on every tab)
   const [syncing, setSyncing] = useState(false)
@@ -34,7 +34,7 @@ export default function Home() {
   const [syncYears, setSyncYears] = useState(3)
   const [syncMax, setSyncMax] = useState(500)
   const [showSyncOpts, setShowSyncOpts] = useState(false)
-  const [progress, setProgress] = useState<{ count: number; oldest: string | null }>({ count: 0, oldest: null })
+  const [progress, setProgress] = useState<{ count: number; examined: number; oldest: string | null }>({ count: 0, examined: 0, oldest: null })
   const [caughtUp, setCaughtUp] = useState(true)
   // True while the initial status check is still in-flight but we've already
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
@@ -52,28 +52,28 @@ export default function Home() {
   useEffect(() => { localStorage.setItem('diwtkn_sync_max', String(syncMax)) }, [syncMax])
 
   // Fetch fresh data from the backend and update both state + local cache.
-  // Only the all-time view (year === null) is cached, so the instant-load
-  // dashboard always reflects the full picture.
-  const loadWrapped = useCallback(async (id: string, year: number | null = null) => {
-    const data = await getWrapped(id, year)
+  // Only the all-time ("total") view is cached, so the instant-load dashboard
+  // always reflects the full picture.
+  const loadWrapped = useCallback(async (id: string, s: WrappedScope = { mode: 'total' }) => {
+    const data = await getWrapped(id, s)
     setWrapped(data)
     setConnected(data.connected)
-    if (year === null) {
+    if (s.mode === 'total') {
       saveWrappedCache(id, data)
       setCachedAt(Date.now())
     }
   }, [])
 
-  // Year toggle — re-fetch scoped stats (pure DB read, no Claude cost).
-  const handleSelectYear = useCallback(async (year: number | null) => {
-    setSelectedYear(year)
-    setYearLoading(true)
+  // Scope picker — re-fetch stats for the chosen window (pure DB read, no Claude).
+  const handleScopeChange = useCallback(async (s: WrappedScope) => {
+    setScope(s)
+    setScopeLoading(true)
     try {
-      await loadWrapped(userId, year)
+      await loadWrapped(userId, s)
     } catch {
       /* keep showing whatever we have */
     } finally {
-      setYearLoading(false)
+      setScopeLoading(false)
     }
   }, [userId, loadWrapped])
 
@@ -93,16 +93,16 @@ export default function Home() {
               : `Synced ${result.synced} — tap Sync again to load older mail.`)
           : (result.message ?? "You're all caught up."),
       })
-      setProgress({ count: result.total, oldest: result.oldestDate ?? null })
-      setRefreshKey(k => k + 1)              // reload Monitor/Audit/Unsubscribe
-      await loadWrapped(userId, selectedYear) // reload Wrapped
+      setProgress({ count: result.total, examined: result.examinedCount ?? 0, oldest: result.oldestDate ?? null })
+      setRefreshKey(k => k + 1)        // reload Monitor/Audit/Unsubscribe
+      await loadWrapped(userId, scope) // reload Wrapped in the current scope
     } catch (e) {
       if (e instanceof ReauthError) setSyncNotice({ text: e.message, error: true, reauth: true })
       else setSyncNotice({ text: e instanceof Error ? e.message : 'Sync failed', error: true })
     } finally {
       setSyncing(false)
     }
-  }, [userId, selectedYear, loadWrapped, syncYears, syncMax])
+  }, [userId, scope, loadWrapped, syncYears, syncMax])
 
   // Disconnect Gmail: revoke server-side, drop local token + cache, show Connect.
   const handleDisconnect = useCallback(async () => {
@@ -169,7 +169,7 @@ export default function Home() {
         const status = await upsertUser(id)
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
-        setProgress({ count: status.entryCount ?? 0, oldest: status.oldestDate ?? null })
+        setProgress({ count: status.entryCount ?? 0, examined: status.examinedCount ?? 0, oldest: status.oldestDate ?? null })
         setCaughtUp(status.caughtUp ?? true)
 
         if (status.connected) {
@@ -245,9 +245,9 @@ export default function Home() {
             userId={userId}
             data={wrapped}
             cachedAt={cachedAt}
-            selectedYear={selectedYear}
-            onSelectYear={handleSelectYear}
-            yearLoading={yearLoading}
+            scope={scope}
+            onScopeChange={handleScopeChange}
+            scopeLoading={scopeLoading}
             onOpenUnsubscribe={() => setView('unsubscribe')}
             onOpenAudit={() => setView('audit')}
             onDisconnect={handleDisconnect}
@@ -303,9 +303,9 @@ export default function Home() {
             </div>
           )}
 
-          {progress.count > 0 && (
+          {(progress.examined > 0 || progress.count > 0) && (
             <div className={`fab-progress${!caughtUp ? ' more' : ''}`}>
-              {progress.count.toLocaleString()} synced{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
+              {progress.examined.toLocaleString()} evaluated · {progress.count.toLocaleString()} stored{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
               <span className="fab-progress-state">
                 {caughtUp ? ' · ✓ up to date' : ' · more to load — keep syncing'}
               </span>

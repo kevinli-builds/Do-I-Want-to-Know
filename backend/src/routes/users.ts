@@ -10,7 +10,7 @@ const RATE_LIMIT_HOURS = Number(process.env.SYNC_RATE_LIMIT_HOURS ?? 24)
 function statusPayload(user: {
   id: string; email: string | null; createdAt: Date; lastSyncedAt: Date | null
   oauthToken: { id: string } | null
-}, entryCount: number, oldest: { date: Date } | null) {
+}, entryCount: number, oldest: { date: Date } | null, examinedCount: number) {
   const caughtUp = !!user.lastSyncedAt && Date.now() - user.lastSyncedAt.getTime() < RATE_LIMIT_HOURS * 3600 * 1000
   return {
     id: user.id,
@@ -18,7 +18,8 @@ function statusPayload(user: {
     connected: !!user.oauthToken,
     createdAt: user.createdAt,
     lastSyncedAt: user.lastSyncedAt,
-    entryCount,
+    entryCount,                 // emails stored as records (LedgerEntry)
+    examinedCount,              // emails evaluated by Claude (ProcessedEmail)
     oldestDate: oldest?.date ?? null,
     caughtUp,
   }
@@ -48,11 +49,12 @@ router.post('/', asyncHandler(async (req, res) => {
       update: {},
       include: { oauthToken: { select: { id: true } } },
     })
-    const [entryCount, oldest] = await Promise.all([
+    const [entryCount, oldest, examinedCount] = await Promise.all([
       prisma.ledgerEntry.count({ where: { userId: user.id } }),
       prisma.ledgerEntry.findFirst({ where: { userId: user.id }, orderBy: { date: 'asc' }, select: { date: true } }),
+      prisma.processedEmail.count({ where: { userId: user.id } }),
     ])
-    return void res.json(statusPayload(user, entryCount, oldest))
+    return void res.json(statusPayload(user, entryCount, oldest, examinedCount))
   }
 
   // Unauthenticated / new device with auth enforced: ensure a row exists for the
@@ -61,7 +63,7 @@ router.post('/', asyncHandler(async (req, res) => {
   if (id && typeof id === 'string') {
     await prisma.user.upsert({ where: { id }, create: { id }, update: {} })
   }
-  res.json({ id: id ?? null, email: null, connected: false, entryCount: 0, oldestDate: null, caughtUp: false })
+  res.json({ id: id ?? null, email: null, connected: false, entryCount: 0, examinedCount: 0, oldestDate: null, caughtUp: false })
 }))
 
 export { router as usersRouter }

@@ -79,8 +79,9 @@ router.post('/sync', asyncHandler(async (req, res) => {
     if (newIds.length === 0) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
       const total = await prisma.ledgerEntry.count({ where: { userId } })
+      const examined = await prisma.processedEmail.count({ where: { userId } })
       const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-      return void res.json({ synced: 0, total, oldestDate: oldest?.date ?? null, caughtUp: true, message: "You're all caught up" })
+      return void res.json({ synced: 0, total, examinedCount: examined, oldestDate: oldest?.date ?? null, caughtUp: true, message: "You're all caught up" })
     }
 
     // 2. Fetch metadata only for the new IDs, then extract with Claude.
@@ -144,8 +145,9 @@ router.post('/sync', asyncHandler(async (req, res) => {
     }
 
     const total = await prisma.ledgerEntry.count({ where: { userId } })
+    const examined = await prisma.processedEmail.count({ where: { userId } })
     const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-    return void res.json({ synced: rows.length, total, oldestDate: oldest?.date ?? null, caughtUp })
+    return void res.json({ synced: rows.length, total, examinedCount: examined, oldestDate: oldest?.date ?? null, caughtUp })
   } catch (err) {
     const kind = gmailErrorKind(err)
     if (kind === 'expired') {

@@ -59,7 +59,8 @@ export interface UserStatus {
   email: string | null
   connected: boolean
   lastSyncedAt?: string | null
-  entryCount?: number
+  entryCount?: number       // emails stored as records
+  examinedCount?: number    // emails evaluated by Claude
   oldestDate?: string | null
   caughtUp?: boolean
 }
@@ -103,13 +104,24 @@ export interface WrappedData {
   email: string | null
   totalEntries: number
   year: number | null
+  from?: string | null
+  to?: string | null
   availableYears: number[]
+  availableMonths?: string[]   // YYYY-MM, newest first
   stats: WrappedStats | null
 }
+
+// How the Wrapped summary is scoped.
+export type WrappedScope =
+  | { mode: 'total' }
+  | { mode: 'year'; year: number }
+  | { mode: 'month'; month: string }            // YYYY-MM
+  | { mode: 'custom'; from: string; to: string } // YYYY-MM-DD … YYYY-MM-DD
 
 export interface SyncResult {
   synced: number
   total: number
+  examinedCount?: number
   oldestDate?: string | null
   caughtUp?: boolean
   message?: string
@@ -139,6 +151,13 @@ export interface MonitorFlag {
   kind: 'up' | 'down' | 'new' | 'info'
   text: string
 }
+export interface TrendChange {
+  fromLabel: string
+  toLabel: string
+  from: number
+  to: number
+  deltaPct: number | null
+}
 export interface MonitorData {
   connected: boolean
   email: string | null
@@ -162,6 +181,7 @@ export interface MonitorData {
   }
   topSenders?: { vendor: string; count: number; prevCount: number }[]
   flags?: MonitorFlag[]
+  trend?: { mom: TrendChange | null; yoy: TrendChange | null }
 }
 
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
@@ -274,8 +294,17 @@ export async function disconnectGmail(): Promise<void> {
   }
 }
 
-export async function getWrapped(userId: string, year?: number | null): Promise<WrappedData> {
-  const qs = year != null ? `?year=${year}` : ''
+export async function getWrapped(userId: string, scope: WrappedScope = { mode: 'total' }): Promise<WrappedData> {
+  let qs = ''
+  if (scope.mode === 'year') {
+    qs = `?year=${scope.year}`
+  } else if (scope.mode === 'custom') {
+    qs = `?from=${encodeURIComponent(scope.from)}&to=${encodeURIComponent(scope.to)}`
+  } else if (scope.mode === 'month') {
+    const [y, m] = scope.month.split('-').map(Number)
+    const lastDay = new Date(y, m, 0).getDate() // day 0 of next month = last day of this month
+    qs = `?from=${scope.month}-01&to=${scope.month}-${String(lastDay).padStart(2, '0')}`
+  }
   const res = await authedFetch(`${API}/wrapped/${encodeURIComponent(userId)}${qs}`)
   if (!res.ok) throw new Error('Could not load your Wrapped')
   return res.json()

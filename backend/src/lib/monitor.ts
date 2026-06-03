@@ -19,6 +19,15 @@ export interface MonitorFlag {
   text: string
 }
 
+// A spend comparison between two periods (for the plain-language trend section).
+export interface TrendChange {
+  fromLabel: string
+  toLabel: string
+  from: number
+  to: number
+  deltaPct: number | null // null when the earlier period was 0 (can't compute %)
+}
+
 // 12-month time-series, split by category, so the UI can chart a single
 // aggregate line or break it out per category, for either metric.
 export interface MonitorAnalytics {
@@ -48,6 +57,11 @@ export interface MonitorData {
   }
   topSenders: { vendor: string; count: number; prevCount: number }[]
   flags: MonitorFlag[]
+  // Plain-language spend trend, independent of the month/year toggle.
+  trend: {
+    mom: TrendChange | null // most recent month vs the month before
+    yoy: TrendChange | null // most recent month vs the same month a year earlier
+  }
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
@@ -124,6 +138,41 @@ export function computeAnalytics(entries: LedgerEntry[], now = new Date()): Moni
     countByCategory,
     spendByCategory,
   }
+}
+
+const monthStartLabel = (d: Date) => d.toLocaleString('en-US', { month: 'long', year: 'numeric' })
+
+// Plain-language spend trend: most recent month vs the prior month (MoM) and vs
+// the same month a year earlier (YoY). Net of refunds, USD. Expects normalized
+// entries. Independent of the month/year period toggle.
+export function computeTrend(entries: LedgerEntry[]): { mom: TrendChange | null; yoy: TrendChange | null } {
+  if (entries.length === 0) return { mom: null, yoy: null }
+  const net = new Map<string, number>()
+  const add = (key: string, v: number) => net.set(key, (net.get(key) ?? 0) + v)
+  for (const e of entries) {
+    if (isSpend(e)) add(monthKey(e.date), e.amount ?? 0)
+    else if (e.category === 'refund') add(monthKey(e.date), -(e.amount ?? 0))
+  }
+
+  const max = new Date(Math.max(...entries.map(e => e.date.getTime())))
+  const cur = new Date(max.getFullYear(), max.getMonth(), 1)
+  const prev = new Date(max.getFullYear(), max.getMonth() - 1, 1)
+  const yoyMonth = new Date(max.getFullYear() - 1, max.getMonth(), 1)
+  const to = round2(net.get(monthKey(cur)) ?? 0)
+
+  const momFrom = round2(net.get(monthKey(prev)) ?? 0)
+  const mom: TrendChange | null = to !== 0 || momFrom !== 0
+    ? { fromLabel: monthStartLabel(prev), toLabel: monthStartLabel(cur), from: momFrom, to, deltaPct: deltaPct(to, momFrom) }
+    : null
+
+  const yoy: TrendChange | null = net.has(monthKey(yoyMonth))
+    ? (() => {
+        const from = round2(net.get(monthKey(yoyMonth)) ?? 0)
+        return { fromLabel: monthStartLabel(yoyMonth), toLabel: monthStartLabel(cur), from, to, deltaPct: deltaPct(to, from) }
+      })()
+    : null
+
+  return { mom, yoy }
 }
 
 export function computeMonitor(
@@ -234,5 +283,6 @@ export function computeMonitor(
     },
     topSenders,
     flags,
+    trend: computeTrend(entries),
   }
 }

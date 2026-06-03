@@ -443,6 +443,26 @@ body {
 .detail-spin .spinner { width: 22px; height: 22px; border-width: 2px; }
 .txn-usd { color: var(--muted); font-weight: 600; font-size: 12px; }
 
+/* ── Wrapped scope picker ───────────────────────────────────── */
+.scope { margin-bottom: 16px; }
+.scope-seg { margin-bottom: 10px; flex-wrap: wrap; display: inline-flex; }
+.scope-options { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.scope-custom label {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 13px; color: var(--muted);
+}
+.scope-custom input[type="date"] {
+  padding: 6px 9px; border: 1px solid var(--border); border-radius: 9px;
+  font-size: 13px; font-family: inherit; color: var(--ink); background: #fff;
+}
+
+/* ── Monitor spending trend ─────────────────────────────────── */
+.trend-row { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.trend-row:last-child { border-bottom: none; }
+.trend-head { display: flex; align-items: center; justify-content: space-between; }
+.trend-title { font-weight: 600; }
+.trend-text { font-size: 13px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
 /* ── Unsubscribe helper ─────────────────────────────────────── */
 .spammer {
   border-bottom: 1px solid var(--border);

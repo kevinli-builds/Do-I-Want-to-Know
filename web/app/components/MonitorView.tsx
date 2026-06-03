@@ -1,13 +1,35 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
-import { getMonitor, type MonitorData, type KpiPair } from '../lib/api'
+import { getMonitor, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
 import { AnalyticsChart } from './AnalyticsChart'
 
 const money = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', maximumFractionDigits: 0 }).format(n)
 const moneyFull = (n: number) =>
   new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n)
+
+// One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
+function trendSentence(c: TrendChange): string {
+  if (c.deltaPct === null) return `You spent ${moneyFull(c.to)} in ${c.toLabel} — nothing in ${c.fromLabel}.`
+  if (c.deltaPct === 0) return `Spending held flat at ${moneyFull(c.to)} (${c.fromLabel} → ${c.toLabel}).`
+  const dir = c.deltaPct > 0 ? 'grew' : 'fell'
+  return `Spending ${dir} ${Math.abs(c.deltaPct)}% (${c.fromLabel} → ${c.toLabel}): ${moneyFull(c.from)} → ${moneyFull(c.to)}.`
+}
+
+function TrendRow({ title, c }: { title: string; c: TrendChange }) {
+  const cls = c.deltaPct == null ? 'delta-new' : c.deltaPct === 0 ? 'delta-flat' : c.deltaPct > 0 ? 'delta-up' : 'delta-down'
+  const badge = c.deltaPct == null ? 'new' : c.deltaPct === 0 ? 'no change' : `${c.deltaPct > 0 ? '▲' : '▼'} ${Math.abs(c.deltaPct)}%`
+  return (
+    <div className="trend-row">
+      <div className="trend-head">
+        <span className="trend-title">{title}</span>
+        <span className={`delta ${cls}`}>{badge}</span>
+      </div>
+      <p className="trend-text">{trendSentence(c)}</p>
+    </div>
+  )
+}
 
 // Delta badge: ▲ for increase (warm), ▼ for decrease (cool), "new" when no baseline.
 function Delta({ pair }: { pair: KpiPair }) {
@@ -127,6 +149,15 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
           {data.flags.map((f, i) => (
             <span key={i} className={`flag flag-${f.kind}`}>{f.text}</span>
           ))}
+        </div>
+      )}
+
+      {/* Plain-language spend trend (MoM + YoY) */}
+      {data.trend && (data.trend.mom || data.trend.yoy) && (
+        <div className="card">
+          <h2>📈 Spending Trend</h2>
+          {data.trend.mom && <TrendRow title="Month over month" c={data.trend.mom} />}
+          {data.trend.yoy && <TrendRow title="Year over year" c={data.trend.yoy} />}
         </div>
       )}
 

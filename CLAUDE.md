@@ -228,15 +228,15 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 
 | Method | Path | Description |
 |---|---|---|
-| POST | `/users` | Bootstrap/status. With a valid `Authorization: Bearer` token → `{id, email, connected, lastSyncedAt, entryCount, oldestDate, caughtUp}`; without one → always `connected:false` (reveals nothing) |
+| POST | `/users` | Bootstrap/status. With a valid `Authorization: Bearer` token → `{id, email, connected, lastSyncedAt, entryCount, examinedCount, oldestDate, caughtUp}` (`entryCount`=stored records, `examinedCount`=emails evaluated); without one → always `connected:false` (reveals nothing) |
 | GET | `/auth/google?userId=&redirect=` | Start OAuth — redirects to Google. `redirect` (optional) is the frontend origin to return to |
 | GET | `/auth/google/callback` | OAuth callback — stores Gmail tokens, mints a one-time `LoginCode`, redirects to `<redirect>/?connected=1&code=<code>` (web) or shows a "close tab" page (mobile) |
 | POST | `/auth/exchange` | `{code}` → trades the one-time handoff code for `{userId, token}` (the durable session token). Code is single-use + expires in 10 min; rate-limited per IP |
 | POST | `/auth/disconnect` | Requires session. Revokes Gmail (deletes OAuth tokens, best-effort Google revoke) + all of the user's sessions. Ledger data is kept |
-| POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
-| GET | `/wrapped/:userId?year=` | Returns full Wrapped stats object (optionally scoped to a year) |
+| POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, examinedCount, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
+| GET | `/wrapped/:userId?year=&from=&to=` | Full Wrapped stats, scoped to all-time (default), a calendar `year`, or a custom `from`/`to` window (inclusive ISO dates; takes precedence over `year`). Returns `availableYears` + `availableMonths` for the scope picker |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
-| GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, trends, subscription/inbox monitors, auto-flags |
+| GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
 | GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId`, for the Audit view + Gmail deep links |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
 | POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
