@@ -35,8 +35,8 @@ export function UpcomingFloater({ userId, refreshKey = 0 }: { userId: string; re
 
   return (
     <div className={`upcoming-fab no-print${open ? ' open' : ''}`}>
-      <button className="upcoming-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open}>
-        🗓️ Upcoming <span className="upcoming-badge">{items.length}</span>
+      <button className="upcoming-toggle" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label="Upcoming">
+        🗓️ <span className="upcoming-label">Upcoming</span> <span className="upcoming-badge">{items.length}</span>
       </button>
       {open && (
         <div className="upcoming-panel">

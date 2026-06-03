@@ -1064,6 +1064,49 @@ body {
 .accept-btn.on { background: #e7f7ee; color: #1a7f4b; border-color: #c7ebd6; }
 .txn-meta-actions { display: inline-flex; align-items: center; gap: 10px; }
 
+/* ── Mobile / phone layout ──────────────────────────────────── */
+@media (max-width: 640px) {
+  /* Extra bottom padding so content clears the two bottom-corner floaters */
+  .shell { padding: 16px 14px 110px; }
+
+  /* Tabs: a single horizontally-scrollable row instead of wrapping to 2–3
+     lines (we now have 5 tabs). Momentum scroll, hidden scrollbar. */
+  .view-tabs {
+    flex-wrap: nowrap;
+    justify-content: flex-start;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    padding: 12px 14px 0;
+  }
+  .view-tabs::-webkit-scrollbar { display: none; }
+  .view-tab { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; font-size: 14px; }
+
+  /* Header: let the title + action buttons wrap rather than squash */
+  .header { flex-wrap: wrap; gap: 10px; }
+  .header h1 { font-size: 22px; }
+  .big { font-size: 40px; }
+
+  /* Two floaters, opposite bottom corners, so neither collides with the tab
+     bar at the top. Sync stays bottom-right; Upcoming moves bottom-LEFT and
+     opens upward. */
+  .upcoming-fab {
+    top: auto;
+    bottom: 18px;
+    left: 14px;
+    right: auto;
+    align-items: flex-start;
+    flex-direction: column-reverse; /* panel renders above the toggle */
+  }
+  .upcoming-label { display: none; }            /* compact: 🗓️ + count only */
+  .upcoming-toggle { padding: 10px 12px; }
+  .upcoming-panel { width: min(280px, calc(100vw - 28px)); }
+
+  .fab-wrap { right: 14px; bottom: 18px; gap: 8px; align-items: flex-end; }
+  .fab { padding: 13px 18px; font-size: 14px; }
+  .fab-toast, .fab-progress, .sync-opts { max-width: calc(100vw - 116px); }
+}
+
 /* ── Print / Save as PDF ────────────────────────────────────── */
 @media print {
   .no-print { display: none !important; }
