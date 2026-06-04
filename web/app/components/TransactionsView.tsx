@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, type Transaction } from '../lib/api'
+import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, renameVendorAll, type Transaction } from '../lib/api'
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 
@@ -62,6 +62,8 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState('')
   const skipBlur = useRef(false)
+  // After a single rename, offer to apply it to the vendor's other rows.
+  const [bulkPrompt, setBulkPrompt] = useState<{ from: string; to: string; count: number } | null>(null)
 
   function startEditVendor(id: string, current: string) {
     skipBlur.current = false
@@ -76,11 +78,29 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
     if (skipBlur.current) { skipBlur.current = false; return }
     const v = draft.trim()
     const snapshot = all
+    const old = snapshot?.find(t => t.id === id)?.vendor
     setEditingId(null)
-    if (!v || v === snapshot?.find(t => t.id === id)?.vendor) return // no-op on empty/unchanged
+    if (!v || v === old) return // no-op on empty/unchanged
     setAll(list => list ? list.map(t => (t.id === id ? { ...t, vendor: v } : t)) : list)
     try {
       await updateTransaction(userId, id, { vendor: v })
+      onChanged?.()
+      // If other rows still carry the old name, offer to rename them too.
+      const others = snapshot?.filter(t => t.vendor === old && t.id !== id).length ?? 0
+      if (old && others > 0) setBulkPrompt({ from: old, to: v, count: others })
+    } catch {
+      setAll(snapshot)
+    }
+  }
+
+  async function applyBulkRename() {
+    if (!bulkPrompt) return
+    const { from, to } = bulkPrompt
+    setBulkPrompt(null)
+    const snapshot = all
+    setAll(list => list ? list.map(t => (t.vendor === from ? { ...t, vendor: to } : t)) : list)
+    try {
+      await renameVendorAll(userId, from, to)
       onChanged?.()
     } catch {
       setAll(snapshot)
@@ -172,6 +192,18 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
               Hide accepted
             </label>
           </div>
+
+          {bulkPrompt && (
+            <div className="bulk-rename-bar">
+              <span>
+                Rename the {bulkPrompt.count} other “{bulkPrompt.from}” record{bulkPrompt.count === 1 ? '' : 's'} to “{bulkPrompt.to}” too?
+              </span>
+              <span className="bulk-rename-actions">
+                <button className="btn" onClick={applyBulkRename}>Apply to all</button>
+                <button className="link-btn" onClick={() => setBulkPrompt(null)}>Dismiss</button>
+              </span>
+            </div>
+          )}
 
           <div className="card" style={{ padding: 8 }}>
             {rows.length === 0 ? (

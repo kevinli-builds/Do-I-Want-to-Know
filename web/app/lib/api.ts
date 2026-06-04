@@ -228,6 +228,18 @@ export async function updateTransaction(
   if (!res.ok) throw new Error('Could not update transaction')
 }
 
+/** Rename every record with vendor == `from` to `to`. Returns the count updated. */
+export async function renameVendorAll(userId: string, from: string, to: string): Promise<number> {
+  const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/rename-vendor`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from, to }),
+  })
+  if (!res.ok) throw new Error('Could not rename vendor')
+  const data = await res.json().catch(() => ({}))
+  return data.updated ?? 0
+}
+
 /** Deep link to the exact Gmail message a record was extracted from. */
 export function gmailMessageUrl(emailId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${emailId}`

@@ -78,4 +78,20 @@ router.patch('/:userId/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, id, ...data })
 }))
 
+// POST /transactions/:userId/rename-vendor   { from, to }
+// Rename every record with vendor == `from` to `to` (this user only). Powers the
+// "rename all" option so a messy sender name can be fixed across the board.
+router.post('/:userId/rename-vendor', asyncHandler(async (req, res) => {
+  const { userId } = req.params
+  const from = String(req.body?.from ?? '').trim()
+  const to = String(req.body?.to ?? '').trim().slice(0, 120)
+  if (!from || !to) return void res.status(400).json({ error: 'from and to are required' })
+
+  const result = await prisma.ledgerEntry.updateMany({
+    where: { userId, vendor: from },       // ownership-scoped
+    data: { vendor: to },
+  })
+  res.json({ ok: true, updated: result.count, to })
+}))
+
 export { router as transactionsRouter }

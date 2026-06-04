@@ -479,6 +479,21 @@ body {
   min-width: 180px;
   color: var(--ink);
 }
+.bulk-rename-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  background: #f4f3ff;
+  border: 1px solid #dddaf9;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+.bulk-rename-actions { display: inline-flex; align-items: center; gap: 12px; }
+.bulk-rename-bar .btn { padding: 8px 16px; }
 
 /* ── Upcoming floater (top-right) ───────────────────────────── */
 .upcoming-fab {
