@@ -46,16 +46,30 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
     }
   }
 
-  // Inline category correction — optimistic local update, revert on failure.
-  async function changeCategory(id: string, newCat: string) {
+  // Apply a local edit optimistically; persist via apiCall; revert the list if
+  // it fails. onChanged + onOk run only on success.
+  async function optimisticEdit(
+    mutate: (list: Transaction[]) => Transaction[],
+    apiCall: () => Promise<unknown>,
+    onOk?: () => void,
+  ) {
     const snapshot = all
-    setAll(list => list ? list.map(t => (t.id === id ? { ...t, category: newCat, categoryLocked: true } : t)) : list)
+    setAll(list => (list ? mutate(list) : list))
     try {
-      await updateTransaction(userId, id, { category: newCat })
+      await apiCall()
       onChanged?.()   // let other views (Wrapped totals etc.) pick up the change
+      onOk?.()
     } catch {
       setAll(snapshot) // revert
     }
+  }
+
+  // Inline category correction.
+  function changeCategory(id: string, newCat: string) {
+    return optimisticEdit(
+      list => list.map(t => (t.id === id ? { ...t, category: newCat, categoryLocked: true } : t)),
+      () => updateTransaction(userId, id, { category: newCat }),
+    )
   }
 
   // Inline vendor rename — click ✏️, edit, Enter/blur to save, Esc to cancel.
@@ -74,37 +88,28 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
     skipBlur.current = true   // suppress the save that the input's blur would trigger
     setEditingId(null)
   }
-  async function saveVendor(id: string) {
+  function saveVendor(id: string) {
     if (skipBlur.current) { skipBlur.current = false; return }
     const v = draft.trim()
-    const snapshot = all
-    const old = snapshot?.find(t => t.id === id)?.vendor
+    const old = all?.find(t => t.id === id)?.vendor
     setEditingId(null)
     if (!v || v === old) return // no-op on empty/unchanged
-    setAll(list => list ? list.map(t => (t.id === id ? { ...t, vendor: v } : t)) : list)
-    try {
-      await updateTransaction(userId, id, { vendor: v })
-      onChanged?.()
-      // If other rows still carry the old name, offer to rename them too.
-      const others = snapshot?.filter(t => t.vendor === old && t.id !== id).length ?? 0
-      if (old && others > 0) setBulkPrompt({ from: old, to: v, count: others })
-    } catch {
-      setAll(snapshot)
-    }
+    const others = all?.filter(t => t.vendor === old && t.id !== id).length ?? 0
+    return optimisticEdit(
+      list => list.map(t => (t.id === id ? { ...t, vendor: v } : t)),
+      () => updateTransaction(userId, id, { vendor: v }),
+      () => { if (old && others > 0) setBulkPrompt({ from: old, to: v, count: others }) },
+    )
   }
 
-  async function applyBulkRename() {
+  function applyBulkRename() {
     if (!bulkPrompt) return
     const { from, to } = bulkPrompt
     setBulkPrompt(null)
-    const snapshot = all
-    setAll(list => list ? list.map(t => (t.vendor === from ? { ...t, vendor: to } : t)) : list)
-    try {
-      await renameVendorAll(userId, from, to)
-      onChanged?.()
-    } catch {
-      setAll(snapshot)
-    }
+    return optimisticEdit(
+      list => list.map(t => (t.vendor === from ? { ...t, vendor: to } : t)),
+      () => renameVendorAll(userId, from, to),
+    )
   }
 
   const categories = useMemo(

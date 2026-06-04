@@ -26,6 +26,15 @@ function headerStyle(color = PURPLE): Partial<ExcelJS.Style> {
   }
 }
 
+// Guard against spreadsheet formula injection: a text cell that begins with
+// = + - @ (or a leading tab/CR) can be executed as a formula by Excel/Sheets.
+// Vendor + description text is user- and email-derived, so prefix any such value
+// with an apostrophe to force it to literal text.
+function safeText(v: string | null | undefined): string {
+  const s = String(v ?? '')
+  return /^[=+\-@\t\r]/.test(s) ? `'${s}` : s
+}
+
 function altRow(isAlt: boolean): Partial<ExcelJS.Style> {
   return {
     fill: isAlt
@@ -80,8 +89,8 @@ router.get('/:userId', asyncHandler(async (req, res) => {
     const row = txSheet.addRow({
       date:        e.date,
       category:    CATEGORY_LABELS[e.category as keyof typeof CATEGORY_LABELS] ?? e.category,
-      vendor:      e.vendor,
-      description: e.description,
+      vendor:      safeText(e.vendor),
+      description: safeText(e.description),
       amount:      e.amount ?? '',
       currency:    e.currency,
     })
@@ -124,7 +133,7 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   const insights = stats?.subscriptionInsights ?? []
   insights.forEach((s, i) => {
     const row = subSheet.addRow({
-      vendor:   s.vendor,
+      vendor:   safeText(s.vendor),
       cadence:  s.cadence,
       monthly:  s.monthlyEstimate || '',
       last:     s.lastAmount ?? '',
@@ -168,9 +177,9 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   mktEntries.forEach((e, i) => {
     const row = mktSheet.addRow({
       date:        e.date,
-      vendor:      e.vendor,
-      senderEmail: e.senderEmail ?? '',
-      description: e.description,
+      vendor:      safeText(e.vendor),
+      senderEmail: safeText(e.senderEmail),
+      description: safeText(e.description),
       unsubscribe: e.unsubscribe ?? '',
     })
     const alt = altRow(i % 2 === 1)
@@ -208,7 +217,8 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   }
 
   function addKV(label: string, value: string | number, isAlt = false) {
-    const row = sumSheet.addRow([label, value])
+    // Label can be a user/email-derived vendor name — guard against formula injection.
+    const row = sumSheet.addRow([safeText(label), typeof value === 'number' ? value : safeText(value)])
     if (isAlt) {
       row.eachCell(c => {
         c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: LIGHT } }
