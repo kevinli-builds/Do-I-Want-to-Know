@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { getUsdRates, toUsd } from '../lib/fx'
+import { CATEGORIES } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
 
@@ -36,8 +37,29 @@ router.get('/:userId', asyncHandler(async (req, res) => {
       senderEmail: e.senderEmail,
       unsubscribe: e.unsubscribe,
       termMonths: e.termMonths,
+      categoryLocked: e.categoryLocked,
     })),
   })
+}))
+
+// PATCH /transactions/:userId/:id   { category }
+// Manually correct a record's category. requireSession guarantees :userId is
+// the caller; we additionally scope the update to that user's own row, and set
+// categoryLocked so the entry is treated as user-authoritative going forward.
+router.patch('/:userId/:id', asyncHandler(async (req, res) => {
+  const { userId, id } = req.params
+  const category = String(req.body?.category ?? '')
+  if (!CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
+    return void res.status(400).json({ error: 'Invalid category' })
+  }
+
+  const result = await prisma.ledgerEntry.updateMany({
+    where: { id, userId },                 // ownership-scoped: can't touch another user's row
+    data: { category, categoryLocked: true },
+  })
+  if (result.count === 0) return void res.status(404).json({ error: 'Transaction not found' })
+
+  res.json({ ok: true, id, category })
 }))
 
 export { router as transactionsRouter }

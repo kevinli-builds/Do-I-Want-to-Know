@@ -67,7 +67,8 @@ Do I Want To Know/
 │       ├── 20260601000000_session_auth/     Adds Session (hashed bearer tokens) + LoginCode (one-time OAuth handoff)
 │       ├── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
 │       ├── 20260603000000_processed_emails/  Adds ProcessedEmail (examined-email dedup; backfilled from LedgerEntry)
-│       └── 20260604000000_upcoming_promos/    Adds LedgerEntry.eventDate + promoCode + discount
+│       ├── 20260604000000_upcoming_promos/    Adds LedgerEntry.eventDate + promoCode + discount
+│       └── 20260605000000_category_lock/       Adds LedgerEntry.categoryLocked (manual category override)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -174,6 +175,7 @@ model LedgerEntry {
   eventDate   DateTime? // future date: delivery ETA / departure / check-in / event (powers Upcoming); for marketing = promo expiry
   promoCode   String?  // coupon/promo code (marketing) — surfaced in the Promotions tab
   discount    String?  // short offer text, e.g. "20% off" (marketing)
+  categoryLocked Boolean @default(false) // user manually corrected the category (Audit) — never auto-reclassify
   createdAt   DateTime @default(now())
   @@unique([userId, emailId])
 }
@@ -242,7 +244,8 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | GET | `/wrapped/:userId?year=&from=&to=` | Full Wrapped stats, scoped to all-time (default), a calendar `year`, or a custom `from`/`to` window (inclusive ISO dates; takes precedence over `year`). Returns `availableYears` + `availableMonths` for the scope picker |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
-| GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId`, for the Audit view + Gmail deep links |
+| GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId` + `categoryLocked`, for the Audit view + Gmail deep links |
+| PATCH | `/transactions/:userId/:id` | `{category}` → manually correct a record's category (validated against `CATEGORIES`, ownership-scoped). Sets `categoryLocked` so it's never auto-reclassified |
 | GET | `/upcoming/:userId` | Future-dated non-promo events (`eventDate` ≥ today: deliveries, flights, check-ins, tickets), soonest first — powers the Upcoming floater |
 | GET | `/promotions/:userId` | Active marketing offers (have a promo code, discount, or future expiry; expired ones dropped), soonest-expiry first — powers the Promotions tab |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |

@@ -204,6 +204,7 @@ export interface Transaction {
   senderEmail: string | null
   unsubscribe: string | null
   termMonths: number | null
+  categoryLocked?: boolean
 }
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {
@@ -211,6 +212,16 @@ export async function getTransactions(userId: string): Promise<Transaction[]> {
   if (!res.ok) throw new Error('Could not load transactions')
   const data = await res.json()
   return data.transactions ?? []
+}
+
+/** Manually correct a transaction's category (sets it as user-authoritative). */
+export async function updateTransactionCategory(userId: string, id: string, category: string): Promise<void> {
+  const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/${encodeURIComponent(id)}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category }),
+  })
+  if (!res.ok) throw new Error('Could not update category')
 }
 
 /** Deep link to the exact Gmail message a record was extracted from. */

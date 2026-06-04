@@ -263,7 +263,11 @@ export default function Home() {
         ) : view === 'monitor' ? (
           <MonitorView userId={userId} refreshKey={refreshKey} />
         ) : view === 'audit' ? (
-          <TransactionsView userId={userId} refreshKey={refreshKey} />
+          <TransactionsView
+            userId={userId}
+            refreshKey={refreshKey}
+            onChanged={() => { loadWrapped(userId, scope).catch(() => {}) }}
+          />
         ) : view === 'promotions' ? (
           <PromotionsView userId={userId} refreshKey={refreshKey} />
         ) : (

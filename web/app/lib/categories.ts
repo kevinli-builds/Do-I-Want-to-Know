@@ -13,6 +13,9 @@ export const CATEGORY_META: Record<string, { label: string; emoji: string; color
   other:         { label: 'Other',           emoji: '🧾', color: '#888899' },
 }
 
+// Ordered list of category keys (for pickers). Mirrors the backend CATEGORIES.
+export const CATEGORY_KEYS = Object.keys(CATEGORY_META)
+
 export function catLabel(cat: string): string {
   return CATEGORY_META[cat]?.label ?? cat.charAt(0).toUpperCase() + cat.slice(1)
 }

@@ -443,6 +443,21 @@ body {
 .detail-spin .spinner { width: 22px; height: 22px; border-width: 2px; }
 .txn-usd { color: var(--muted); font-weight: 600; font-size: 12px; }
 
+/* Inline category corrector in the Audit list */
+.txn-cat-edit { display: inline-flex; align-items: center; gap: 4px; }
+.cat-select {
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #faf9ff;
+  color: var(--ink);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.cat-select:hover { border-color: var(--purple); }
+.cat-edited { color: var(--purple); font-size: 12px; }
+
 /* ── Upcoming floater (top-right) ───────────────────────────── */
 .upcoming-fab {
   position: fixed;

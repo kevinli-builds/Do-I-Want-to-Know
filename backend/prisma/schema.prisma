@@ -70,6 +70,7 @@ model LedgerEntry {
   eventDate   DateTime? // powers the Upcoming floater + promo expiry
   promoCode   String?   // coupon/promo code to use at checkout (marketing)
   discount    String?   // short offer text, e.g. "20% off" (marketing)
+  categoryLocked Boolean @default(false) // user manually set the category — never auto-reclassify
   createdAt   DateTime @default(now())
 
   @@unique([userId, emailId])

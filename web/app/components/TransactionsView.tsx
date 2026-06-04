@@ -1,8 +1,8 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
-import { catEmoji } from '../lib/categories'
+import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransactionCategory, type Transaction } from '../lib/api'
+import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 
 function fmtDate(iso: string): string {
@@ -11,7 +11,7 @@ function fmtDate(iso: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
-export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
+export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId: string; refreshKey?: number; onChanged?: () => void }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
   const [error, setError] = useState(false)
   const [search, setSearch] = useState('')
@@ -43,6 +43,18 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
       setAccepted(new Set(vendors))
     } catch {
       setAccepted(prev => { const n = new Set(prev); was ? n.add(vendor) : n.delete(vendor); return n }) // revert
+    }
+  }
+
+  // Inline category correction — optimistic local update, revert on failure.
+  async function changeCategory(id: string, newCat: string) {
+    const snapshot = all
+    setAll(list => list ? list.map(t => (t.id === id ? { ...t, category: newCat, categoryLocked: true } : t)) : list)
+    try {
+      await updateTransactionCategory(userId, id, newCat)
+      onChanged?.()   // let other views (Wrapped totals etc.) pick up the change
+    } catch {
+      setAll(snapshot) // revert
     }
   }
 
@@ -158,7 +170,20 @@ export function TransactionsView({ userId, refreshKey = 0 }: { userId: string; r
                     </div>
                   )}
                   <div className="txn-meta">
-                    <span>{fmtDate(t.date)} · {t.category}</span>
+                    <span className="txn-cat-edit">
+                      {fmtDate(t.date)} ·{' '}
+                      <select
+                        className="cat-select"
+                        value={t.category}
+                        onChange={e => changeCategory(t.id, e.target.value)}
+                        title="Change category"
+                      >
+                        {CATEGORY_KEYS.map(c => (
+                          <option key={c} value={c}>{catEmoji(c)} {catLabel(c)}</option>
+                        ))}
+                      </select>
+                      {t.categoryLocked && <span className="cat-edited" title="Manually corrected">✎</span>}
+                    </span>
                     <span className="txn-meta-actions">
                       <button
                         className={`accept-btn${accepted.has(t.vendor) ? ' on' : ''}`}
