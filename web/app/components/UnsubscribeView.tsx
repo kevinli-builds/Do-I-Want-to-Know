@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getTransactions, getAcceptances, setAcceptance, type Transaction } from '../lib/api'
+import { getTransactions, getAcceptances, setAcceptance, safeHref, type Transaction } from '../lib/api'
 
 interface Sender {
   vendor: string
@@ -222,7 +222,7 @@ export function UnsubscribeView({ userId, refreshKey = 0 }: { userId: string; re
                     </div>
                     <div className="sender-actions">
                       {s.unsubscribe && (
-                        <a className="link-btn" href={s.unsubscribe} target="_blank" rel="noopener noreferrer">
+                        <a className="link-btn" href={safeHref(s.unsubscribe)} target="_blank" rel="noopener noreferrer">
                           {isMailto ? 'Unsubscribe (email)' : 'Unsubscribe'}
                         </a>
                       )}

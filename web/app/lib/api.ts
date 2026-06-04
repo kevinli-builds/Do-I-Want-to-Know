@@ -218,6 +218,16 @@ export function gmailMessageUrl(emailId: string): string {
   return `https://mail.google.com/mail/u/0/#all/${emailId}`
 }
 
+/**
+ * Defense-in-depth for links built from email data (e.g. unsubscribe links):
+ * only allow http(s)/mailto schemes, so a malformed/hostile value can never
+ * render as a `javascript:` (or other) href. Returns undefined if unsafe.
+ */
+export function safeHref(url: string | null | undefined): string | undefined {
+  if (!url) return undefined
+  return /^(https?:|mailto:)/i.test(url.trim()) ? url : undefined
+}
+
 // ── Upcoming events (deliveries, flights, check-ins, tickets) ───────────────
 export interface UpcomingItem {
   id: string

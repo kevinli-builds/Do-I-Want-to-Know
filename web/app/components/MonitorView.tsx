@@ -1,8 +1,9 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { getMonitor, getTransactions, gmailMessageUrl, type MonitorData, type KpiPair, type TrendChange, type Transaction } from '../lib/api'
+import { getMonitor, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
+import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { AnalyticsChart } from './AnalyticsChart'
 
 const fmtDate = (iso: string) => {
@@ -67,26 +68,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
   const [error, setError] = useState(false)
 
   // Expandable Top-Senders drilldown — lazy-load the txn list once (like Wrapped).
-  const [txns, setTxns] = useState<Transaction[] | null>(null)
-  const [txnState, setTxnState] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
-  const [open, setOpen] = useState<Set<string>>(new Set())
-
-  const ensureTxns = useCallback(async () => {
-    if (txnState === 'loading' || txnState === 'done') return
-    setTxnState('loading')
-    try { setTxns(await getTransactions(userId)); setTxnState('done') }
-    catch { setTxnState('error') }
-  }, [txnState, userId])
-
-  const toggleSender = useCallback((vendor: string) => {
-    setOpen(prev => {
-      const next = new Set(prev)
-      if (next.has(vendor)) next.delete(vendor)
-      else next.add(vendor)
-      return next
-    })
-    void ensureTxns()
-  }, [ensureTxns])
+  const { txns, state: txnState, open, toggle: toggleSender, retry } = useTxnDrilldown(userId)
 
   const load = useCallback(async (p: 'month' | 'year') => {
     setLoading(true)
@@ -151,7 +133,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
         {txnState === 'loading' && <div className="detail-spin"><div className="spinner" /></div>}
         {txnState === 'error' && (
           <div className="detail-empty">
-            Couldn’t load details. <button className="link-btn" onClick={() => { setTxnState('idle'); void ensureTxns() }}>Retry</button>
+            Couldn’t load details. <button className="link-btn" onClick={retry}>Retry</button>
           </div>
         )}
         {txnState === 'done' && txns && (() => {
@@ -165,7 +147,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
                 <div className="detail-summary">
                   {first.senderEmail ?? 'sender unknown'}
                   {first.unsubscribe && (
-                    <> · <a className="txn-link" href={first.unsubscribe} target="_blank" rel="noopener noreferrer">Unsubscribe ↗</a></>
+                    <> · <a className="txn-link" href={safeHref(first.unsubscribe)} target="_blank" rel="noopener noreferrer">Unsubscribe ↗</a></>
                   )}
                 </div>
               )}

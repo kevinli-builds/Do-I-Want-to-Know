@@ -1,9 +1,10 @@
 'use client'
 
-import { Fragment, useCallback, useState } from 'react'
-import { downloadExcel, getTransactions, gmailMessageUrl, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
+import { Fragment, useState } from 'react'
+import { downloadExcel, gmailMessageUrl, safeHref, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
 import { catLabel, catEmoji } from '../lib/categories'
 import { money } from '../lib/format'
+import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { SpendChart } from './SpendChart'
 
 function monthLabel(m: string): string {
@@ -80,30 +81,7 @@ export function WrappedView({
   const segCls = (m: WrappedScope['mode']) => `seg-btn${scope.mode === m && !customOpen ? ' active' : ''}`
 
   // ── Expandable row details (lazy-load the full transaction list once) ──────
-  const [txns, setTxns] = useState<Transaction[] | null>(null)
-  const [txnState, setTxnState] = useState<'idle' | 'loading' | 'error' | 'done'>('idle')
-  const [open, setOpen] = useState<Set<string>>(new Set())
-
-  const ensureTxns = useCallback(async () => {
-    if (txnState === 'loading' || txnState === 'done') return
-    setTxnState('loading')
-    try {
-      setTxns(await getTransactions(userId))
-      setTxnState('done')
-    } catch {
-      setTxnState('error')
-    }
-  }, [txnState, userId])
-
-  const toggle = useCallback((key: string) => {
-    setOpen(prev => {
-      const next = new Set(prev)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
-      return next
-    })
-    void ensureTxns()
-  }, [ensureTxns])
+  const { txns, state: txnState, open, toggle, retry } = useTxnDrilldown(userId)
 
   // Detail rows respect the active scope so they match the row's numbers.
   const inScope = (t: Transaction) => {
@@ -142,7 +120,7 @@ export function WrappedView({
         {txnState === 'loading' && <div className="detail-spin"><div className="spinner" /></div>}
         {txnState === 'error' && (
           <div className="detail-empty">
-            Couldn’t load details. <button className="link-btn" onClick={() => { setTxnState('idle'); void ensureTxns() }}>Retry</button>
+            Couldn’t load details. <button className="link-btn" onClick={retry}>Retry</button>
           </div>
         )}
         {txnState === 'done' && txns && (() => {
@@ -376,7 +354,7 @@ export function WrappedView({
                   <div className="detail-summary">
                     {s.senderEmail ?? 'sender unknown'}
                     {s.unsubscribe && (
-                      <> · <a className="txn-link" href={s.unsubscribe} target="_blank" rel="noopener noreferrer">Unsubscribe ↗</a></>
+                      <> · <a className="txn-link" href={safeHref(s.unsubscribe)} target="_blank" rel="noopener noreferrer">Unsubscribe ↗</a></>
                     )}
                   </div>
                 )
