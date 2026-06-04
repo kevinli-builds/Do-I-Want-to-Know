@@ -1,7 +1,7 @@
 'use client'
 
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransactionCategory, type Transaction } from '../lib/api'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, type Transaction } from '../lib/api'
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 
@@ -51,10 +51,39 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
     const snapshot = all
     setAll(list => list ? list.map(t => (t.id === id ? { ...t, category: newCat, categoryLocked: true } : t)) : list)
     try {
-      await updateTransactionCategory(userId, id, newCat)
+      await updateTransaction(userId, id, { category: newCat })
       onChanged?.()   // let other views (Wrapped totals etc.) pick up the change
     } catch {
       setAll(snapshot) // revert
+    }
+  }
+
+  // Inline vendor rename — click ✏️, edit, Enter/blur to save, Esc to cancel.
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState('')
+  const skipBlur = useRef(false)
+
+  function startEditVendor(id: string, current: string) {
+    skipBlur.current = false
+    setEditingId(id)
+    setDraft(current)
+  }
+  function cancelEditVendor() {
+    skipBlur.current = true   // suppress the save that the input's blur would trigger
+    setEditingId(null)
+  }
+  async function saveVendor(id: string) {
+    if (skipBlur.current) { skipBlur.current = false; return }
+    const v = draft.trim()
+    const snapshot = all
+    setEditingId(null)
+    if (!v || v === snapshot?.find(t => t.id === id)?.vendor) return // no-op on empty/unchanged
+    setAll(list => list ? list.map(t => (t.id === id ? { ...t, vendor: v } : t)) : list)
+    try {
+      await updateTransaction(userId, id, { vendor: v })
+      onChanged?.()
+    } catch {
+      setAll(snapshot)
     }
   }
 
@@ -152,7 +181,25 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
                 <div className="txn" key={t.id}>
                   <div className="txn-main">
                     <span className="txn-vendor">
-                      {catEmoji(t.category)} {t.vendor}
+                      {catEmoji(t.category)}{' '}
+                      {editingId === t.id ? (
+                        <input
+                          className="vendor-input"
+                          value={draft}
+                          autoFocus
+                          onChange={e => setDraft(e.target.value)}
+                          onKeyDown={e => {
+                            if (e.key === 'Enter') { e.preventDefault(); saveVendor(t.id) }
+                            else if (e.key === 'Escape') { e.preventDefault(); cancelEditVendor() }
+                          }}
+                          onBlur={() => saveVendor(t.id)}
+                        />
+                      ) : (
+                        <>
+                          {t.vendor}
+                          <button className="vendor-edit-btn" onClick={() => startEditVendor(t.id, t.vendor)} title="Rename vendor">✏️</button>
+                        </>
+                      )}
                     </span>
                     <span className="txn-amount" style={t.category === 'refund' ? { color: '#0ea5e9' } : undefined}>
                       {t.amount != null

@@ -245,7 +245,7 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
 | GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
 | GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId` + `categoryLocked`, for the Audit view + Gmail deep links |
-| PATCH | `/transactions/:userId/:id` | `{category}` → manually correct a record's category (validated against `CATEGORIES`, ownership-scoped). Sets `categoryLocked` so it's never auto-reclassified |
+| PATCH | `/transactions/:userId/:id` | `{category?, vendor?}` → manually correct a record's category and/or vendor (ownership-scoped). Category is validated against `CATEGORIES` and sets `categoryLocked`; vendor is trimmed + capped at 120 chars |
 | GET | `/upcoming/:userId` | Future-dated non-promo events (`eventDate` ≥ today: deliveries, flights, check-ins, tickets), soonest first — powers the Upcoming floater |
 | GET | `/promotions/:userId` | Active marketing offers (have a promo code, discount, or future expiry; expired ones dropped), soonest-expiry first — powers the Promotions tab |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |

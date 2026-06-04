@@ -458,6 +458,28 @@ body {
 .cat-select:hover { border-color: var(--purple); }
 .cat-edited { color: var(--purple); font-size: 12px; }
 
+/* Inline vendor rename in the Audit list */
+.vendor-edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  opacity: 0;
+  margin-left: 6px;
+  transition: opacity 0.12s ease;
+}
+.txn:hover .vendor-edit-btn { opacity: 0.6; }
+.vendor-edit-btn:hover { opacity: 1; }
+.vendor-input {
+  font: inherit;
+  font-weight: 700;
+  border: 1px solid var(--purple);
+  border-radius: 7px;
+  padding: 2px 8px;
+  min-width: 180px;
+  color: var(--ink);
+}
+
 /* ── Upcoming floater (top-right) ───────────────────────────── */
 .upcoming-fab {
   position: fixed;

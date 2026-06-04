@@ -214,14 +214,18 @@ export async function getTransactions(userId: string): Promise<Transaction[]> {
   return data.transactions ?? []
 }
 
-/** Manually correct a transaction's category (sets it as user-authoritative). */
-export async function updateTransactionCategory(userId: string, id: string, category: string): Promise<void> {
+/** Manually correct a transaction's category and/or vendor. */
+export async function updateTransaction(
+  userId: string,
+  id: string,
+  patch: { category?: string; vendor?: string },
+): Promise<void> {
   const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ category }),
+    body: JSON.stringify(patch),
   })
-  if (!res.ok) throw new Error('Could not update category')
+  if (!res.ok) throw new Error('Could not update transaction')
 }
 
 /** Deep link to the exact Gmail message a record was extracted from. */

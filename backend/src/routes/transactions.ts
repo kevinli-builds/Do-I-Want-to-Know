@@ -42,24 +42,40 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   })
 }))
 
-// PATCH /transactions/:userId/:id   { category }
-// Manually correct a record's category. requireSession guarantees :userId is
-// the caller; we additionally scope the update to that user's own row, and set
-// categoryLocked so the entry is treated as user-authoritative going forward.
+// PATCH /transactions/:userId/:id   { category?, vendor? }
+// Manually correct a record's category and/or vendor. requireSession guarantees
+// :userId is the caller; we additionally scope the update to that user's own row.
+// A category change sets categoryLocked so the entry stays user-authoritative.
 router.patch('/:userId/:id', asyncHandler(async (req, res) => {
   const { userId, id } = req.params
-  const category = String(req.body?.category ?? '')
-  if (!CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
-    return void res.status(400).json({ error: 'Invalid category' })
+  const data: { category?: string; categoryLocked?: boolean; vendor?: string } = {}
+
+  if (req.body?.category !== undefined) {
+    const category = String(req.body.category)
+    if (!CATEGORIES.includes(category as (typeof CATEGORIES)[number])) {
+      return void res.status(400).json({ error: 'Invalid category' })
+    }
+    data.category = category
+    data.categoryLocked = true
+  }
+
+  if (req.body?.vendor !== undefined) {
+    const vendor = String(req.body.vendor).trim().slice(0, 120)
+    if (!vendor) return void res.status(400).json({ error: 'Vendor cannot be empty' })
+    data.vendor = vendor
+  }
+
+  if (Object.keys(data).length === 0) {
+    return void res.status(400).json({ error: 'Nothing to update' })
   }
 
   const result = await prisma.ledgerEntry.updateMany({
     where: { id, userId },                 // ownership-scoped: can't touch another user's row
-    data: { category, categoryLocked: true },
+    data,
   })
   if (result.count === 0) return void res.status(404).json({ error: 'Transaction not found' })
 
-  res.json({ ok: true, id, category })
+  res.json({ ok: true, id, ...data })
 }))
 
 export { router as transactionsRouter }
