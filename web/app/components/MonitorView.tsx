@@ -11,6 +11,13 @@ const fmtDate = (iso: string) => {
   return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
 }
 
+const renewWhen = (r: { date: string; daysAway: number }) => {
+  if (r.daysAway <= 0) return 'today'
+  if (r.daysAway === 1) return 'tomorrow'
+  if (r.daysAway < 14) return `in ${r.daysAway} days`
+  return new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
+}
+
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {
   if (c.deltaPct === null) return `You spent ${moneyFull(c.to)} in ${c.toLabel} — nothing in ${c.fromLabel}.`
@@ -241,8 +248,23 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
               <span className="value">{moneyFull(p.from)} → {moneyFull(p.to)}</span>
             </div>
           ))}
-        {subs.newlyDetected.length === 0 && subs.priceChanges.length === 0 && (
-          <p className="chart-caption">No new subscriptions or price changes detected.</p>
+
+        {subs.renewals && subs.renewals.length > 0 && (
+          <>
+            <div className="sub-section-label">Renewing soon</div>
+            {subs.renewals.slice(0, 8).map(r => (
+              <div className="row" key={`${r.vendor}-${r.date}`}>
+                <span className="label">🔁 {r.vendor}</span>
+                <span className="value">
+                  {renewWhen(r)}{r.amount != null ? ` · ${moneyFull(r.amount)}` : ''}
+                </span>
+              </div>
+            ))}
+          </>
+        )}
+
+        {subs.newlyDetected.length === 0 && subs.priceChanges.length === 0 && (!subs.renewals || subs.renewals.length === 0) && (
+          <p className="chart-caption">No new subscriptions, price changes, or upcoming renewals detected.</p>
         )}
       </div>
 

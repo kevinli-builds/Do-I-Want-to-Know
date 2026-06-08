@@ -87,6 +87,7 @@ Key rules:
 eventDate / promo rules:
 - eventDate is a FUTURE-relevant date pulled from the email text when present: "arriving Jun 5", "departs Aug 12", "check-in Sep 1", "event on Oct 3" → that date. For a marketing/promo email, eventDate is the offer EXPIRY ("ends Sunday", "valid through 6/30"). Resolve relative dates (e.g. "Sunday") against the email Date when you can; otherwise omit. Omit entirely if no such date is stated.
 - promoCode + discount apply to marketing/promo emails only: extract the literal code and a short offer description when shown. Omit when not a promo.
+- free trials: an email saying a FREE TRIAL is ending / converting to paid ("your free trial ends on …", "trial ends in 3 days", "you'll be charged on …") is category "subscription" with NO amount yet, eventDate = the date the trial ends / first charge hits, vendor = the service, and description noting "free trial ends".
 
 termMonths rule:
 - Set termMonths ONLY when a single charge clearly covers a fixed multi-month term paid upfront, e.g. "6-month plan" → 6, "annual"/"1-year"/"yearly" → 12, "quarterly"/"3 months" → 3, "biannual"/"2 years" → 24.

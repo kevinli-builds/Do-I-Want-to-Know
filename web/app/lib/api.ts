@@ -178,6 +178,7 @@ export interface MonitorData {
     activeCount: number
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
     priceChanges: { vendor: string; from: number; to: number }[]
+    renewals?: Renewal[]
   }
   topSenders?: { vendor: string; count: number; prevCount: number }[]
   flags?: MonitorFlag[]
@@ -255,7 +256,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
   return /^(https?:|mailto:)/i.test(url.trim()) ? url : undefined
 }
 
-// ── Upcoming events (deliveries, flights, check-ins, tickets) ───────────────
+// ── Upcoming events (deliveries, flights, check-ins, tickets) + renewals ────
 export interface UpcomingItem {
   id: string
   category: string
@@ -265,11 +266,19 @@ export interface UpcomingItem {
   emailId: string
 }
 
-export async function getUpcoming(userId: string): Promise<UpcomingItem[]> {
+export interface Renewal {
+  vendor: string
+  amount: number | null
+  cadence: 'weekly' | 'monthly' | 'annual'
+  date: string
+  daysAway: number
+}
+
+export async function getUpcoming(userId: string): Promise<{ upcoming: UpcomingItem[]; renewals: Renewal[] }> {
   const res = await authedFetch(`${API}/upcoming/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load upcoming')
   const data = await res.json()
-  return data.upcoming ?? []
+  return { upcoming: data.upcoming ?? [], renewals: data.renewals ?? [] }
 }
 
 // ── Promotions (active discounts + promo codes) ─────────────────────────────

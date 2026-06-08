@@ -5,6 +5,7 @@ import type { LedgerEntry } from '@prisma/client'
 import { SPEND_CATEGORIES, type Category } from './categories'
 import { computeStats } from './stats'
 import { normalizeToUsd } from './fx'
+import { computeRenewals, type Renewal } from './renewals'
 
 export type Period = 'month' | 'year'
 
@@ -54,6 +55,7 @@ export interface MonitorData {
     activeCount: number
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
     priceChanges: { vendor: string; from: number; to: number }[]
+    renewals: Renewal[]
   }
   topSenders: { vendor: string; count: number; prevCount: number }[]
   flags: MonitorFlag[]
@@ -276,6 +278,7 @@ export function computeMonitor(
       activeCount: activeInsights.length,
       newlyDetected,
       priceChanges,
+      renewals: computeRenewals(stats.subscriptionInsights, now),
     },
     topSenders,
     flags,

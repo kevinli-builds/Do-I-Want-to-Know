@@ -114,7 +114,7 @@ function topSpammersFrom(marketingEntries: LedgerEntry[], limit: number): Spamme
 
 // Analyze subscription entries per vendor: detect cadence from the gaps between
 // charges, estimate a normalized monthly cost, and flag whether it's still active.
-function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
+export function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
   insights: SubscriptionInsight[]
   monthlyCost: number
   annualCost: number
