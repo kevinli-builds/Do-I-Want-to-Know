@@ -198,6 +198,7 @@ export function computeMonitor(
   // ── Subscription monitor ──────────────────────────────────────────────────
   const stats = computeStats(entries)
   const activeInsights = stats.subscriptionInsights.filter(s => s.active)
+  const renewals = computeRenewals(stats.subscriptionInsights, now)
 
   // Group subscription charges by vendor (ascending date) for new/price detection
   const subByVendor: Record<string, LedgerEntry[]> = {}
@@ -259,6 +260,13 @@ export function computeMonitor(
   for (const p of priceChanges) {
     flags.push({ kind: 'info', text: `Price change: ${p.vendor} $${p.from} → $${p.to}` })
   }
+  // Heads-up: subscriptions renewing within the next 7 days.
+  for (const r of renewals) {
+    if (r.daysAway > 7) continue
+    const when = r.daysAway <= 0 ? 'today' : r.daysAway === 1 ? 'tomorrow' : `in ${r.daysAway} days`
+    const amt = r.amount != null ? ` ($${r.amount.toFixed(2)})` : ''
+    flags.push({ kind: 'info', text: `${r.vendor} renews ${when}${amt}` })
+  }
   if (flags.length === 0) flags.push({ kind: 'info', text: 'No notable changes this period.' })
 
   return {
@@ -278,7 +286,7 @@ export function computeMonitor(
       activeCount: activeInsights.length,
       newlyDetected,
       priceChanges,
-      renewals: computeRenewals(stats.subscriptionInsights, now),
+      renewals,
     },
     topSenders,
     flags,
