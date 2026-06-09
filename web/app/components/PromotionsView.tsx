@@ -2,19 +2,17 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { getPromotions, gmailMessageUrl, type Promotion } from '../lib/api'
+import { daysUntil, monthDay } from '../lib/dates'
 
 // "Expires today" / "Expires in 3 days" / "Expires Jun 30" / "" (no known expiry)
 function expiryLabel(iso: string | null): { text: string; urgent: boolean } {
   if (!iso) return { text: 'No end date given', urgent: false }
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return { text: '', urgent: false }
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const day = new Date(d); day.setHours(0, 0, 0, 0)
-  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000)
+  const diff = daysUntil(iso)
+  if (isNaN(diff)) return { text: '', urgent: false }
   if (diff <= 0) return { text: 'Expires today', urgent: true }
   if (diff === 1) return { text: 'Expires tomorrow', urgent: true }
   if (diff < 7) return { text: `Expires in ${diff} days`, urgent: true }
-  return { text: `Expires ${d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`, urgent: false }
+  return { text: `Expires ${monthDay(iso)}`, urgent: false }
 }
 
 function PromoCard({ promo }: { promo: Promotion }) {

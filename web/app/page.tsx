@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
 import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
+import { monthYear } from './lib/dates'
 import { ConnectView } from './components/ConnectView'
 import { WrappedView } from './components/WrappedView'
 import { MonitorView } from './components/MonitorView'
@@ -11,12 +12,6 @@ import { TransactionsView } from './components/TransactionsView'
 import { UnsubscribeView } from './components/UnsubscribeView'
 import { PromotionsView } from './components/PromotionsView'
 import { UpcomingFloater } from './components/UpcomingFloater'
-
-function fmtMonthYear(iso: string | null): string {
-  if (!iso) return ''
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-}
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -322,7 +317,7 @@ export default function Home() {
 
           {(progress.examined > 0 || progress.count > 0) && (
             <div className={`fab-progress${!caughtUp ? ' more' : ''}`}>
-              {progress.examined.toLocaleString()} evaluated · {progress.count.toLocaleString()} stored{progress.oldest ? ` · back to ${fmtMonthYear(progress.oldest)}` : ''}
+              {progress.examined.toLocaleString()} evaluated · {progress.count.toLocaleString()} stored{progress.oldest ? ` · back to ${monthYear(progress.oldest)}` : ''}
               <span className="fab-progress-state">
                 {caughtUp ? ' · ✓ up to date' : ' · more to load — keep syncing'}
               </span>

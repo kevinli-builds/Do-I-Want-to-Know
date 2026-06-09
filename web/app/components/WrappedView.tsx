@@ -4,6 +4,7 @@ import { Fragment, useState } from 'react'
 import { downloadExcel, gmailMessageUrl, safeHref, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
 import { catLabel, catEmoji } from '../lib/categories'
 import { money } from '../lib/format'
+import { fmtDate, monthYear, relativeTime } from '../lib/dates'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { SpendChart } from './SpendChart'
 
@@ -13,29 +14,6 @@ function monthLabel(m: string): string {
   return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
 }
 const todayISO = () => new Date().toISOString().slice(0, 10)
-
-function relativeTime(ts: number): string {
-  const secs = Math.floor((Date.now() - ts) / 1000)
-  if (secs < 60) return 'just now'
-  const mins = Math.floor(secs / 60)
-  if (mins < 60) return `${mins} min ago`
-  const hrs = Math.floor(mins / 60)
-  if (hrs < 24) return `${hrs}h ago`
-  const days = Math.floor(hrs / 24)
-  return `${days} day${days === 1 ? '' : 's'} ago`
-}
-
-function shortDate(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-}
-
-function fullDate(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
 
 export function WrappedView({
   userId,
@@ -146,7 +124,7 @@ export function WrappedView({
                   </div>
                   {t.description && <div className="txn-desc">{t.description}</div>}
                   <div className="txn-meta">
-                    <span>{fullDate(t.date)} · {t.category}</span>
+                    <span>{fmtDate(t.date)} · {t.category}</span>
                     <a className="txn-link" href={gmailMessageUrl(t.emailId)} target="_blank" rel="noopener noreferrer">View email ↗</a>
                   </div>
                 </div>
@@ -455,7 +433,7 @@ export function WrappedView({
                           {!s.active
                             ? ' · no recent charge'
                             : s.lastCharge
-                              ? ` · last ${shortDate(s.lastCharge)}`
+                              ? ` · last ${monthYear(s.lastCharge)}`
                               : ''}
                         </span>
                       </span>

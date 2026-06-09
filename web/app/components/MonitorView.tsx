@@ -3,20 +3,9 @@
 import { Fragment, useCallback, useEffect, useState } from 'react'
 import { getMonitor, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
+import { fmtDate, relativeDay } from '../lib/dates'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { AnalyticsChart } from './AnalyticsChart'
-
-const fmtDate = (iso: string) => {
-  const d = new Date(iso)
-  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
-
-const renewWhen = (r: { date: string; daysAway: number }) => {
-  if (r.daysAway <= 0) return 'today'
-  if (r.daysAway === 1) return 'tomorrow'
-  if (r.daysAway < 14) return `in ${r.daysAway} days`
-  return new Date(r.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-}
 
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {
@@ -256,7 +245,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
               <div className="row" key={`${r.vendor}-${r.date}`}>
                 <span className="label">🔁 {r.vendor}</span>
                 <span className="value">
-                  {renewWhen(r)}{r.amount != null ? ` · ${moneyFull(r.amount)}` : ''}
+                  {relativeDay(r.date)}{r.amount != null ? ` · ${moneyFull(r.amount)}` : ''}
                 </span>
               </div>
             ))}

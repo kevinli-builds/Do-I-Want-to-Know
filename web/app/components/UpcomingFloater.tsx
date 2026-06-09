@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { getUpcoming, gmailMessageUrl, type UpcomingItem, type Renewal } from '../lib/api'
 import { money } from '../lib/format'
+import { relativeDay } from '../lib/dates'
 
 const EMOJI: Record<string, string> = {
   order: '📦', clothes: '👕', travel: '✈️', food: '🍔',
@@ -10,19 +11,6 @@ const EMOJI: Record<string, string> = {
 }
 const CADENCE_WORD: Record<Renewal['cadence'], string> = {
   weekly: 'Weekly', monthly: 'Monthly', annual: 'Annual',
-}
-
-// "today" / "tomorrow" / "in 4 days" / "Jun 12"
-function whenLabel(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  const today = new Date(); today.setHours(0, 0, 0, 0)
-  const day = new Date(d); day.setHours(0, 0, 0, 0)
-  const diff = Math.round((day.getTime() - today.getTime()) / 86_400_000)
-  if (diff <= 0) return 'today'
-  if (diff === 1) return 'tomorrow'
-  if (diff < 7) return `in ${diff} days`
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
 }
 
 export function UpcomingFloater({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
@@ -64,7 +52,7 @@ export function UpcomingFloater({ userId, refreshKey = 0 }: { userId: string; re
                     <span className="upcoming-vendor">{it.vendor}</span>
                     <span className="upcoming-desc">{it.description}</span>
                   </span>
-                  <span className="upcoming-when">{whenLabel(it.eventDate)}</span>
+                  <span className="upcoming-when">{relativeDay(it.eventDate)}</span>
                 </a>
               ))}
             </>
@@ -82,7 +70,7 @@ export function UpcomingFloater({ userId, refreshKey = 0 }: { userId: string; re
                       {CADENCE_WORD[r.cadence]} renewal{r.amount != null ? ` · ${money(r.amount)}` : ''}
                     </span>
                   </span>
-                  <span className="upcoming-when">{whenLabel(r.date)}</span>
+                  <span className="upcoming-when">{relativeDay(r.date)}</span>
                 </div>
               ))}
             </>

@@ -4,12 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, renameVendorAll, type Transaction } from '../lib/api'
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
-
-function fmtDate(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return ''
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
-}
+import { fmtDate } from '../lib/dates'
 
 export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId: string; refreshKey?: number; onChanged?: () => void }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
