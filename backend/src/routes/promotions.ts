@@ -32,6 +32,8 @@ router.get('/:userId', asyncHandler(async (req, res) => {
     .filter(e => !e.eventDate || e.eventDate >= startOfToday)
     .sort((a, b) => (a.eventDate?.getTime() ?? Infinity) - (b.eventDate?.getTime() ?? Infinity))
 
+  // Note: deliberately no senderEmail/unsubscribe here — the Promotions card
+  // doesn't render them, so don't ship them (least-data principle).
   res.json({
     promotions: active.map(e => ({
       id: e.id,
@@ -40,8 +42,6 @@ router.get('/:userId', asyncHandler(async (req, res) => {
       promoCode: e.promoCode,
       discount: e.discount,
       expiresAt: e.eventDate,
-      senderEmail: e.senderEmail,
-      unsubscribe: e.unsubscribe,
       emailId: e.emailId,
     })),
   })

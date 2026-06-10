@@ -4,11 +4,8 @@ import { useEffect, useState } from 'react'
 import { getUpcoming, gmailMessageUrl, type UpcomingItem, type Renewal } from '../lib/api'
 import { money } from '../lib/format'
 import { relativeDay } from '../lib/dates'
+import { catEmoji } from '../lib/categories'
 
-const EMOJI: Record<string, string> = {
-  order: '📦', clothes: '👕', travel: '✈️', food: '🍔',
-  entertainment: '🎟️', subscription: '🔁', other: '🗓️',
-}
 const CADENCE_WORD: Record<Renewal['cadence'], string> = {
   weekly: 'Weekly', monthly: 'Monthly', annual: 'Annual',
 }
@@ -47,7 +44,7 @@ export function UpcomingFloater({ userId, refreshKey = 0 }: { userId: string; re
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <span className="upcoming-emoji">{EMOJI[it.category] ?? '🗓️'}</span>
+                  <span className="upcoming-emoji">{catEmoji(it.category)}</span>
                   <span className="upcoming-body">
                     <span className="upcoming-vendor">{it.vendor}</span>
                     <span className="upcoming-desc">{it.description}</span>

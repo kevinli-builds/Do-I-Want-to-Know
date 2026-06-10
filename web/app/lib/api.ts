@@ -289,8 +289,6 @@ export interface Promotion {
   promoCode: string | null
   discount: string | null
   expiresAt: string | null
-  senderEmail: string | null
-  unsubscribe: string | null
   emailId: string
 }
 

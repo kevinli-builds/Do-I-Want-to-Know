@@ -6,6 +6,7 @@ import { prisma } from '../lib/prisma'
 import { logError } from '../lib/log'
 import { newToken, createSession, requireSession, revokeUserSessions } from '../lib/session'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
+import { makeRateLimiter } from '../lib/rateLimit'
 
 const router = Router()
 
@@ -13,22 +14,9 @@ const router = Router()
 // back to the frontend and the immediate exchange call.
 const LOGIN_CODE_TTL_MS = 10 * 60 * 1000
 
-// Lightweight in-memory rate limiter for the unauthenticated /auth/exchange
-// endpoint (defense in depth — the codes are already unguessable). Caps attempts
-// per client IP per window. Single-instance deploy, so an in-process map is fine.
-const EXCHANGE_MAX = 20
-const EXCHANGE_WINDOW_MS = 60 * 1000
-const exchangeHits = new Map<string, { count: number; resetAt: number }>()
-function exchangeRateLimited(ip: string): boolean {
-  const now = Date.now()
-  const rec = exchangeHits.get(ip)
-  if (!rec || rec.resetAt < now) {
-    exchangeHits.set(ip, { count: 1, resetAt: now + EXCHANGE_WINDOW_MS })
-    return false
-  }
-  rec.count++
-  return rec.count > EXCHANGE_MAX
-}
+// Per-IP rate limit for the unauthenticated /auth/exchange endpoint (defense in
+// depth — the codes are already unguessable).
+const exchangeRateLimited = makeRateLimiter(20, 60 * 1000)
 
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.readonly',

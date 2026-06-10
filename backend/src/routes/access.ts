@@ -1,10 +1,16 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
+import { makeRateLimiter } from '../lib/rateLimit'
 
 const router = Router()
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+// This endpoint is unauthenticated by design (people requesting access don't
+// have a session yet), and each new email writes a DB row + pings the owner's
+// webhook — so cap attempts per IP to stop spam/flooding.
+const requestRateLimited = makeRateLimiter(5, 60 * 1000)
 
 // Best-effort push notification to the owner. ACCESS_WEBHOOK_URL can be a
 // Discord OR Slack incoming webhook — we send both `content` (Discord) and
@@ -33,6 +39,9 @@ async function notifyOwner(email: string, note?: string | null): Promise<void> {
 // POST /access/request  { email, note? }
 // Records a request to be added as a test user and pings the owner.
 router.post('/request', asyncHandler(async (req, res) => {
+  if (requestRateLimited(req.ip ?? 'unknown')) {
+    return void res.status(429).json({ error: 'Too many requests — please wait a minute and try again.' })
+  }
   const email = String(req.body?.email ?? '').trim().toLowerCase()
   const note = req.body?.note ? String(req.body.note).slice(0, 200) : null
   if (!EMAIL_RE.test(email)) {
