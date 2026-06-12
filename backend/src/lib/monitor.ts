@@ -2,10 +2,19 @@
 // Pure functions over LedgerEntry[]; no I/O, no Claude.
 
 import type { LedgerEntry } from '@prisma/client'
-import { SPEND_CATEGORIES, type Category } from './categories'
+import { SPEND_CATEGORIES, CATEGORY_LABELS, type Category } from './categories'
 import { computeStats } from './stats'
 import { normalizeToUsd } from './fx'
 import { computeRenewals, type Renewal } from './renewals'
+
+export interface BudgetInput { category: string; amount: number }
+export interface BudgetProgress {
+  category: string  // a category key, or 'overall'
+  label: string
+  amount: number    // monthly budget (USD)
+  spent: number     // this calendar month (USD)
+  pct: number       // 0..N (can exceed 100)
+}
 
 export type Period = 'month' | 'year'
 
@@ -58,6 +67,7 @@ export interface MonitorData {
     renewals: Renewal[]
   }
   topSenders: { vendor: string; count: number; prevCount: number }[]
+  budgets: BudgetProgress[]
   flags: MonitorFlag[]
   // Plain-language spend trend, independent of the month/year toggle.
   trend: {
@@ -177,11 +187,40 @@ export function computeTrend(entries: LedgerEntry[]): { mom: TrendChange | null;
   return { mom, yoy }
 }
 
+// Spend-vs-budget for the CURRENT calendar month (budgets are monthly), per
+// budgeted category (or 'overall'). Expects USD-normalized entries.
+function computeBudgets(entries: LedgerEntry[], budgets: BudgetInput[], now: Date): BudgetProgress[] {
+  if (budgets.length === 0) return []
+  const y = now.getFullYear(), m = now.getMonth()
+  const month = entries.filter(e => e.date.getFullYear() === y && e.date.getMonth() === m)
+  const spentFor = (cat: string): number => {
+    if (cat === 'overall') {
+      const gross = month.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0)
+      const refunds = month.filter(e => e.category === 'refund').reduce((s, e) => s + (e.amount ?? 0), 0)
+      return round2(gross - refunds)
+    }
+    return round2(month.filter(e => e.category === cat).reduce((s, e) => s + (e.amount ?? 0), 0))
+  }
+  return budgets
+    .map(b => {
+      const spent = spentFor(b.category)
+      return {
+        category: b.category,
+        label: b.category === 'overall' ? 'Overall' : (CATEGORY_LABELS[b.category as Category] ?? b.category),
+        amount: round2(b.amount),
+        spent,
+        pct: b.amount > 0 ? Math.round((spent / b.amount) * 100) : 0,
+      }
+    })
+    .sort((a, b) => b.pct - a.pct)
+}
+
 export function computeMonitor(
   rawEntries: LedgerEntry[],
   period: Period,
   rates: Record<string, number> = { USD: 1 },
   now = new Date(),
+  budgets: BudgetInput[] = [],
 ): MonitorData {
   // Normalize amounts to USD up front so every KPI, trend, and subscription
   // figure below is single-currency.
@@ -267,6 +306,15 @@ export function computeMonitor(
     const amt = r.amount != null ? ` ($${r.amount.toFixed(2)})` : ''
     flags.push({ kind: 'info', text: `${r.vendor} renews ${when}${amt}` })
   }
+  // Budget alerts (current month).
+  const budgetProgress = computeBudgets(entries, budgets, now)
+  for (const b of budgetProgress) {
+    if (b.pct >= 100) {
+      flags.push({ kind: 'up', text: `Over budget: ${b.label} $${Math.round(b.spent)} / $${Math.round(b.amount)} (${b.pct}%)` })
+    } else if (b.pct >= 85) {
+      flags.push({ kind: 'info', text: `Nearing budget: ${b.label} ${b.pct}% of $${Math.round(b.amount)}` })
+    }
+  }
   if (flags.length === 0) flags.push({ kind: 'info', text: 'No notable changes this period.' })
 
   return {
@@ -289,6 +337,7 @@ export function computeMonitor(
       renewals,
     },
     topSenders,
+    budgets: budgetProgress,
     flags,
     trend: computeTrend(entries),
   }

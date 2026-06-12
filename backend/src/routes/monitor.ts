@@ -21,21 +21,22 @@ router.get('/:userId', asyncHandler(async (req, res) => {
 
   const period: Period = req.query.period === 'year' ? 'year' : 'month'
 
-  const entries = await prisma.ledgerEntry.findMany({
-    where: { userId },
-    orderBy: { date: 'desc' },
-  })
+  const [entries, budgetRows, rates] = await Promise.all([
+    prisma.ledgerEntry.findMany({ where: { userId }, orderBy: { date: 'desc' } }),
+    prisma.budget.findMany({ where: { userId } }),
+    getUsdRates(),
+  ])
 
   if (entries.length === 0) {
     return void res.json({ connected: !!user.oauthToken, email: user.email, empty: true, period })
   }
 
-  const rates = await getUsdRates()
+  const budgets = budgetRows.map(b => ({ category: b.category, amount: b.amount }))
   res.json({
     connected: true,
     email: user.email,
     empty: false,
-    ...computeMonitor(entries, period, rates),
+    ...computeMonitor(entries, period, rates, new Date(), budgets),
   })
 }))
 

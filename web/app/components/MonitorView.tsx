@@ -1,9 +1,10 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { getMonitor, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
+import { getMonitor, setBudget, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
 import { fmtDate, relativeDay } from '../lib/dates'
+import { catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { AnalyticsChart } from './AnalyticsChart'
 
@@ -77,6 +78,23 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
       setLoading(false)
     }
   }, [userId])
+
+  // Budget editor
+  const [bCat, setBCat] = useState('overall')
+  const [bAmt, setBAmt] = useState('')
+  const [bSaving, setBSaving] = useState(false)
+
+  async function saveBudget() {
+    const amt = Number(bAmt)
+    if (!Number.isFinite(amt) || amt <= 0) return
+    setBSaving(true)
+    try { await setBudget(userId, bCat, amt); setBAmt(''); await load(period) }
+    catch { /* ignore */ }
+    finally { setBSaving(false) }
+  }
+  async function removeBudget(category: string) {
+    try { await setBudget(userId, category, 0); await load(period) } catch { /* ignore */ }
+  }
 
   useEffect(() => { load(period) }, [load, period, refreshKey])
 
@@ -212,6 +230,50 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
         <Kpi label="Subscription Spend" pair={k.subscriptionSpend} kind="money" />
         <Kpi label="Promo Emails" pair={k.promoEmails} kind="count" />
         <Kpi label="Donations" pair={k.donations} kind="money" />
+      </div>
+
+      {/* Budgets (current month) */}
+      <div className="card">
+        <h2>🎯 Budgets <span className="sub-section-inline">this month</span></h2>
+        {data.budgets && data.budgets.length > 0 ? (
+          data.budgets.map(b => {
+            const status = b.pct >= 100 ? 'over' : b.pct >= 85 ? 'near' : 'ok'
+            return (
+              <div className="budget-row" key={b.category}>
+                <div className="budget-head">
+                  <span className="budget-label">{b.label}</span>
+                  <span className="budget-nums">
+                    {moneyFull(b.spent)} / {moneyFull(b.amount)} · {b.pct}%
+                    <button className="budget-remove" onClick={() => removeBudget(b.category)} title="Remove budget" aria-label="Remove budget">×</button>
+                  </span>
+                </div>
+                <div className="budget-bar"><div className={`budget-fill ${status}`} style={{ width: `${Math.min(b.pct, 100)}%` }} /></div>
+              </div>
+            )
+          })
+        ) : (
+          <p className="chart-caption" style={{ textAlign: 'left', margin: '0 0 12px' }}>
+            No budgets yet — set one below to track this month’s spend and get over-budget alerts.
+          </p>
+        )}
+
+        <div className="budget-editor no-print">
+          <select className="audit-select" value={bCat} onChange={e => setBCat(e.target.value)}>
+            <option value="overall">Overall</option>
+            {CATEGORY_KEYS.map(c => <option key={c} value={c}>{catLabel(c)}</option>)}
+          </select>
+          <input
+            className="budget-input"
+            type="number"
+            min="0"
+            inputMode="decimal"
+            placeholder="$ / mo"
+            value={bAmt}
+            onChange={e => setBAmt(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') saveBudget() }}
+          />
+          <button className="btn" onClick={saveBudget} disabled={bSaving || !bAmt}>Set</button>
+        </div>
       </div>
 
       {/* Analytics — configurable line chart */}

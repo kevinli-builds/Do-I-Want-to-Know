@@ -249,6 +249,8 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | POST | `/transactions/:userId/rename-vendor` | `{from, to}` → rename every record with vendor `from` to `to` (ownership-scoped). Powers the Audit "rename all" prompt |
 | GET | `/upcoming/:userId` | `{upcoming, renewals}`: future-dated non-promo events (`eventDate` ≥ today: deliveries, flights, check-ins, tickets, trial-end dates) + predicted subscription renewals (next charge per active sub within ~45d, `lib/renewals.ts`). Powers the Upcoming floater |
 | GET | `/promotions/:userId` | Active marketing offers (have a promo code, discount, or future expiry; expired ones dropped), soonest-expiry first — powers the Promotions tab |
+| GET | `/budgets/:userId` | `{budgets: {category: amount}}` — the user's monthly budgets (per category or `overall`, USD) |
+| PUT | `/budgets/:userId` | `{category, amount}` → upsert a monthly budget (amount ≤ 0 removes it; category validated against `CATEGORIES`+`overall`). The Monitor computes this-month progress + over/near-budget flags |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
 | POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |

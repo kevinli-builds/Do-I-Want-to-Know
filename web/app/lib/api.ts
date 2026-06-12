@@ -181,8 +181,26 @@ export interface MonitorData {
     renewals?: Renewal[]
   }
   topSenders?: { vendor: string; count: number; prevCount: number }[]
+  budgets?: BudgetProgress[]
   flags?: MonitorFlag[]
   trend?: { mom: TrendChange | null; yoy: TrendChange | null }
+}
+
+export interface BudgetProgress {
+  category: string
+  label: string
+  amount: number
+  spent: number
+  pct: number
+}
+
+export async function setBudget(userId: string, category: string, amount: number): Promise<void> {
+  const res = await authedFetch(`${API}/budgets/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ category, amount }),
+  })
+  if (!res.ok) throw new Error('Could not save budget')
 }
 
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
