@@ -1,0 +1,15 @@
+{
+  "name": "Do I Want To Know",
+  "short_name": "DIWTK",
+  "description": "Spotify Wrapped, but for your inbox.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f7f7ff",
+  "theme_color": "#6c63ff",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
