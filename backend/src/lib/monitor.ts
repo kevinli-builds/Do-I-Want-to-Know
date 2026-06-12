@@ -215,6 +215,56 @@ function computeBudgets(entries: LedgerEntry[], budgets: BudgetInput[], now: Dat
     .sort((a, b) => b.pct - a.pct)
 }
 
+const median = (nums: number[]): number => {
+  if (nums.length === 0) return 0
+  const s = [...nums].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
+}
+
+// Flag charges that stand out: a charge much larger than the vendor's historical
+// norm (>=3 prior charges, >=3x the median), or a brand-new vendor this period.
+// Operates on USD-normalized entries; capped to keep the flag strip readable.
+function computeUnusual(entries: LedgerEntry[], curEntries: LedgerEntry[], curBase: Date, period: Period): MonitorFlag[] {
+  const priorByVendor: Record<string, number[]> = {}
+  for (const e of entries) {
+    if (!isSpend(e) || e.amount == null || e.amount <= 0) continue
+    if (e.date < curBase) (priorByVendor[e.vendor] ??= []).push(e.amount)
+  }
+
+  // Largest current-period charge per vendor (avoids multiple flags for one vendor).
+  const curMax: Record<string, number> = {}
+  for (const e of curEntries) {
+    if (!isSpend(e) || e.amount == null || e.amount <= 0) continue
+    curMax[e.vendor] = Math.max(curMax[e.vendor] ?? 0, e.amount)
+  }
+
+  const spikes: { vendor: string; amount: number; ratio: number }[] = []
+  const fresh: { vendor: string; amount: number }[] = []
+  for (const [vendor, amount] of Object.entries(curMax)) {
+    const prior = priorByVendor[vendor]
+    if (!prior || prior.length === 0) {
+      if (amount >= 40) fresh.push({ vendor, amount }) // new vendor, ignore tiny one-offs
+      continue
+    }
+    if (prior.length >= 3) {
+      const med = median(prior)
+      if (med > 0 && amount >= med * 3) spikes.push({ vendor, amount, ratio: amount / med })
+    }
+  }
+
+  const flags: MonitorFlag[] = []
+  spikes.sort((a, b) => b.ratio - a.ratio)
+  for (const s of spikes.slice(0, 3)) {
+    flags.push({ kind: 'up', text: `⚠️ ${s.vendor} $${Math.round(s.amount)} — ${Math.round(s.ratio)}× your usual` })
+  }
+  fresh.sort((a, b) => b.amount - a.amount)
+  const periodWord = period === 'year' ? 'this year' : 'this period'
+  for (const n of fresh.slice(0, 2)) {
+    flags.push({ kind: 'new', text: `New vendor ${periodWord}: ${n.vendor} $${Math.round(n.amount)}` })
+  }
+  return flags
+}
+
 export function computeMonitor(
   rawEntries: LedgerEntry[],
   period: Period,
@@ -306,6 +356,9 @@ export function computeMonitor(
     const amt = r.amount != null ? ` ($${r.amount.toFixed(2)})` : ''
     flags.push({ kind: 'info', text: `${r.vendor} renews ${when}${amt}` })
   }
+  // Unusual-charge alerts (spikes vs a vendor's norm + brand-new vendors).
+  flags.push(...computeUnusual(entries, curEntries, curBase, period))
+
   // Budget alerts (current month).
   const budgetProgress = computeBudgets(entries, budgets, now)
   for (const b of budgetProgress) {
