@@ -202,6 +202,16 @@ model Acceptance {                 // vendors/senders the user marked "Accepted"
   @@unique([userId, vendor])
 }
 
+model Budget {                     // monthly spending budget, per category or 'overall' (USD)
+  id        String   @id @default(cuid())
+  userId    String
+  category  String                 // a CATEGORY value, or 'overall'
+  amount    Float                  // monthly budget in USD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, category])
+}
+
 model Session {                    // bearer session granted after OAuth — only the token HASH is stored
   id        String   @id @default(cuid())
   userId    String

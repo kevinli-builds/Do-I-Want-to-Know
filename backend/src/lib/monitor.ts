@@ -102,18 +102,21 @@ function periodLabel(period: Period, base: Date): string {
     : base.toLocaleString('en-US', { month: 'long', year: 'numeric' })
 }
 
+const sumAmounts = (list: LedgerEntry[]) =>
+  list.reduce((s, e) => s + (e.amount ?? 0), 0)
+
+// Net spend = real purchases minus refunds. Expects USD-normalized entries.
+// Single source for the "net of refunds" rule (KPIs, budgets, trend all use it).
+function netSpend(list: LedgerEntry[]): number {
+  return round2(sumAmounts(list.filter(isSpend)) - sumAmounts(list.filter(e => e.category === 'refund')))
+}
+
 function kpiTotals(entries: LedgerEntry[]) {
-  const grossSpend = entries.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0)
-  const refunds = entries.filter(e => e.category === 'refund').reduce((s, e) => s + (e.amount ?? 0), 0)
-  const spend = round2(grossSpend - refunds) // net of refunds
+  const spend = netSpend(entries)
   const transactions = entries.filter(isSpend).length
-  const subscriptionSpend = round2(
-    entries.filter(e => e.category === 'subscription').reduce((s, e) => s + (e.amount ?? 0), 0)
-  )
+  const subscriptionSpend = round2(sumAmounts(entries.filter(e => e.category === 'subscription')))
   const promoEmails = entries.filter(e => e.category === 'marketing').length
-  const donations = round2(
-    entries.filter(e => e.category === 'charity').reduce((s, e) => s + (e.amount ?? 0), 0)
-  )
+  const donations = round2(sumAmounts(entries.filter(e => e.category === 'charity')))
   return { spend, transactions, subscriptionSpend, promoEmails, donations }
 }
 
@@ -193,14 +196,8 @@ function computeBudgets(entries: LedgerEntry[], budgets: BudgetInput[], now: Dat
   if (budgets.length === 0) return []
   const y = now.getFullYear(), m = now.getMonth()
   const month = entries.filter(e => e.date.getFullYear() === y && e.date.getMonth() === m)
-  const spentFor = (cat: string): number => {
-    if (cat === 'overall') {
-      const gross = month.filter(isSpend).reduce((s, e) => s + (e.amount ?? 0), 0)
-      const refunds = month.filter(e => e.category === 'refund').reduce((s, e) => s + (e.amount ?? 0), 0)
-      return round2(gross - refunds)
-    }
-    return round2(month.filter(e => e.category === cat).reduce((s, e) => s + (e.amount ?? 0), 0))
-  }
+  const spentFor = (cat: string): number =>
+    cat === 'overall' ? netSpend(month) : round2(sumAmounts(month.filter(e => e.category === cat)))
   return budgets
     .map(b => {
       const spent = spentFor(b.category)
