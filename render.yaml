@@ -3,7 +3,10 @@ services:
     name: diwtkn-backend
     runtime: node
     rootDir: backend
-    buildCommand: npm install && npm run db:generate && npm run build
+    # NODE_ENV=production (below) makes `npm install` skip devDependencies, but the
+    # build needs them (typescript/tsc, @types/*). --include=dev forces them in for
+    # the build; runtime still runs with NODE_ENV=production.
+    buildCommand: npm install --include=dev && npm run db:generate && npm run build
     startCommand: npm run start:prod
     envVars:
       - key: DATABASE_URL
