@@ -396,6 +396,39 @@ body {
   text-transform: capitalize;
 }
 
+/* ── Wrapped Moments (fun facts) ────────────────────────────── */
+.moments {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 12px;
+}
+.moment {
+  background: #faf9ff;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 16px 14px;
+  text-align: center;
+}
+.moment-emoji { font-size: 28px; line-height: 1; }
+.moment-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  margin: 8px 0 2px;
+}
+.moment-label {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--purple-dark);
+}
+.moment-detail {
+  font-size: 12px;
+  color: var(--muted);
+  margin-top: 4px;
+}
+
 /* ── Expandable Wrapped rows ────────────────────────────────── */
 .row-clickable {
   cursor: pointer;

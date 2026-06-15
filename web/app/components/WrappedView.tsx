@@ -233,6 +233,23 @@ export function WrappedView({
           {/* ── Spend Over Time chart ──────────────────────────────── */}
           <SpendChart monthlySpend={stats.monthlySpend} year={scope.mode === 'year' ? scope.year : null} />
 
+          {/* ── Wrapped Moments (fun facts) ─────────────────────────── */}
+          {stats.funFacts && stats.funFacts.length > 0 && (
+            <div className="card">
+              <h2>✨ Wrapped Moments</h2>
+              <div className="moments">
+                {stats.funFacts.map((f, i) => (
+                  <div className="moment" key={i}>
+                    <div className="moment-emoji">{f.emoji}</div>
+                    <div className="moment-value">{f.value}</div>
+                    <div className="moment-label">{f.label}</div>
+                    {f.detail && <div className="moment-detail">{f.detail}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* ── Stats Grid ─────────────────────────────────────────── */}
           <div className="grid">
             <div className="stat">

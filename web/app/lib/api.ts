@@ -97,6 +97,7 @@ export interface WrappedStats {
   topSpammers: SpammerStat[]
   charities: { vendor: string; count: number; total: number }[]
   charityTotal: number
+  funFacts?: { emoji: string; label: string; value: string; detail?: string }[]
 }
 
 export interface WrappedData {

@@ -64,6 +64,15 @@ export interface WrappedStats {
   topSpammers: SpammerStat[]
   charities: CharityStat[]
   charityTotal: number
+  funFacts: FunFact[]
+}
+
+// Playful "Wrapped moments" — display-ready strings so the UI just renders them.
+export interface FunFact {
+  emoji: string
+  label: string
+  value: string
+  detail?: string
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -74,6 +83,78 @@ function round2(n: number) {
 
 function monthKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+// ── Wrapped moments (fun facts) ─────────────────────────────────────────────
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const factUsd = (n: number) => '$' + Math.round(n).toLocaleString('en-US')
+const factDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+
+// Compute playful highlights from the (USD-normalized) purchase entries. Only
+// returns facts that have enough data to be meaningful.
+function computeFunFacts(spendEntries: LedgerEntry[]): FunFact[] {
+  const facts: FunFact[] = []
+  if (spendEntries.length === 0) return facts
+
+  const sorted = [...spendEntries].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const withAmt = sorted.filter(e => e.amount != null && e.amount > 0)
+
+  // First purchase of the window
+  const first = sorted[0]
+  facts.push({ emoji: '🌱', label: 'First purchase', value: factDate(first.date), detail: first.vendor })
+
+  // Biggest spending day
+  const byDay = new Map<number, { sum: number; count: number; date: Date }>()
+  for (const e of withAmt) {
+    const k = dayStart(e.date)
+    const cur = byDay.get(k) ?? { sum: 0, count: 0, date: e.date }
+    cur.sum += e.amount!; cur.count++
+    byDay.set(k, cur)
+  }
+  if (byDay.size > 0) {
+    const big = [...byDay.values()].reduce((m, d) => (d.sum > m.sum ? d : m))
+    facts.push({ emoji: '💥', label: 'Biggest spending day', value: factDate(big.date), detail: `${factUsd(big.sum)} · ${big.count} purchase${big.count === 1 ? '' : 's'}` })
+  }
+
+  // Favorite spending day of the week (by amount)
+  if (withAmt.length > 0) {
+    const dow = Array(7).fill(0)
+    for (const e of withAmt) dow[e.date.getDay()] += e.amount!
+    let top = 0
+    for (let i = 1; i < 7; i++) if (dow[i] > dow[top]) top = i
+    if (dow[top] > 0) facts.push({ emoji: '📅', label: 'Favorite spending day', value: `${WEEKDAYS[top]}s`, detail: `${factUsd(dow[top])} total` })
+  }
+
+  // Busiest month (by purchase count)
+  const byMonth = new Map<string, { count: number; date: Date }>()
+  for (const e of sorted) {
+    const k = monthKey(e.date)
+    const cur = byMonth.get(k) ?? { count: 0, date: new Date(e.date.getFullYear(), e.date.getMonth(), 1) }
+    cur.count++
+    byMonth.set(k, cur)
+  }
+  if (byMonth.size > 1) {
+    const busy = [...byMonth.values()].reduce((m, d) => (d.count > m.count ? d : m))
+    facts.push({ emoji: '🔥', label: 'Busiest month', value: busy.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), detail: `${busy.count} purchases` })
+  }
+
+  // Longest no-spend streak (gap between purchase days)
+  const dayTimes = [...new Set(withAmt.map(e => dayStart(e.date)))].sort((a, b) => a - b)
+  if (dayTimes.length >= 2) {
+    let maxGap = 0, gapEnd = dayTimes[0]
+    for (let i = 1; i < dayTimes.length; i++) {
+      const gap = Math.round((dayTimes[i] - dayTimes[i - 1]) / 86_400_000) - 1
+      if (gap > maxGap) { maxGap = gap; gapEnd = dayTimes[i] }
+    }
+    if (maxGap >= 2) facts.push({ emoji: '🏝️', label: 'Longest no-spend streak', value: `${maxGap} days`, detail: `broken ${factDate(new Date(gapEnd))}` })
+  }
+
+  // Vendors visited
+  const vendors = new Set(sorted.map(e => e.vendor))
+  if (vendors.size >= 2) facts.push({ emoji: '🏪', label: 'Vendors visited', value: `${vendors.size}`, detail: 'different merchants' })
+
+  return facts
 }
 
 function topByFreq(entries: LedgerEntry[], limit: number): VendorStat[] {
@@ -268,5 +349,6 @@ export function computeStats(rawEntries: LedgerEntry[], rates: Record<string, nu
     topSpammers,
     charities,
     charityTotal,
+    funFacts: computeFunFacts(spendEntries),
   }
 }
