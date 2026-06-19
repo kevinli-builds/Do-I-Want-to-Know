@@ -338,49 +338,42 @@ npm start
 
 ---
 
-## Current Status (as of May 2026)
+## Current Status (as of June 2026)
 
-**All code is written and TypeScript compiles clean. The app has never been run end-to-end — it is ready to deploy but no infrastructure has been set up yet.**
+**Live and feature-rich. The web app (`web/`, Vercel) is the primary client; the Render backend + Neon DB are deployed. Google OAuth is in Testing mode, so access is invite-only via test users.**
 
-### ✅ Done
-- Full backend: OAuth flow, Gmail fetching, Claude extraction, LedgerEntry storage, Wrapped stats aggregation
-- Full app: ConnectScreen, WrappedScreen, device UUID persistence
-- PostgreSQL schema + migrations
-- Render deployment config (`render.yaml`)
-- Switched extraction model from `claude-opus-4-5` → `claude-haiku-4-5` (~20× cheaper, sufficient for the task)
+### Outstanding (to fully button up)
+- **Deploy the latest commit on Render** — `start:prod` runs `prisma migrate deploy` first, so pending migrations auto-apply. Vercel auto-deploys the frontend on push.
+- **Set an Anthropic spend cap** in the Anthropic Console — the one backstop against API cost (keep auto-reload OFF so overuse fails rather than charging).
+- `TOKEN_ENCRYPTION_KEY` + `FRONTEND_URL` are set on Render. Do NOT rotate `TOKEN_ENCRYPTION_KEY` once tokens are encrypted (you'd be unable to decrypt them).
 
-### ✅ Deployed! (May 29, 2026)
+### Deployed infra
+- **Render** — Express backend (free tier, root `backend/`). `build` runs `prisma generate && tsc`; `start:prod` runs migrations then the server.
+- **Vercel** — Next.js web app (`web/`); `NEXT_PUBLIC_API_URL` points at the Render URL.
+- **Neon** — PostgreSQL; migrations auto-apply on deploy.
+- **Google Cloud** — Gmail API + OAuth client (External, **Testing** → test users only, ≤100; sensitive-scope refresh tokens expire ~7 days, so test users reconnect ~weekly). Redirect URI is `<render-url>/auth/google/callback`. Client ID / test-user emails live in the Google console + Render env, not here.
 
-**Live URL: `https://do-i-want-to-know.onrender.com`**
+### Features built (high level)
+- **Wrapped**: scope picker (total / year / month / custom window), expandable rows → transaction detail, spend-over-time chart, USD-normalized multi-currency, **Wrapped Moments** (fun facts), Excel export.
+- **Monitor**: MoM/YoY trend narrative, KPI deltas, 12-mo analytics chart, subscription monitor + **renewal predictions**, top-senders drilldown, **budgets & alerts**, **unusual-charge alerts**, auto-flag strip.
+- **Audit**: inline category + vendor edit (+ "rename all"), Gmail deep links.
+- **Promotions** tab, **Unsubscribe** tab, **Upcoming floater** (deliveries/flights/renewals/trial-ends).
+- **Auth/security**: bearer sessions (sha256-hashed, 90d expiry), one-time OAuth handoff code, Gmail tokens encrypted at rest, locked CORS, rate-limited `/auth/exchange` + `/access/request`, PII-safe logging, `AUTH_ENFORCED` kill-switch, formula-injection-safe export.
+- **PWA**: installable (manifest + icons + service worker).
 
-- ✅ Google Cloud Console — Gmail API enabled, OAuth consent screen configured (External, test user: snowwarrior1@gmail.com), OAuth 2.0 Web Application client created
-  - GOOGLE_CLIENT_ID: `341789352511-39o1dfeb97j6cog9q0m860oonqu6avld.apps.googleusercontent.com`
-- ✅ Neon.tech — project "do-i-want-to-know" created, both migrations applied on first deploy
-- ✅ Render.com — service "Do-I-Want-to-Know" live (Free tier, Node, root: `backend/`)
-  - All 5 env vars set: DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, ANTHROPIC_API_KEY, BASE_URL
-- ✅ App — `app/app.json` `extra.apiUrl` updated to `https://do-i-want-to-know.onrender.com`
+### Decisions made
+- **Hosting: Render, not Vercel functions** — `/emails/sync` runs 30–120s; needs a persistent server (functions time out).
+- **Model `claude-haiku-4-5`** for extraction — cheap + sufficient for structured JSON.
+- **Currency**: store original `amount`+`currency`; normalize to USD at read time (`lib/fx.ts`).
+- **Edits are user-authoritative**: a manual category/vendor change updates existing rows immediately (`categoryLocked`), but NEW extraction rules only affect newly-synced mail (sync dedups via `ProcessedEmail`, skipping already-examined email).
 
-### ⚠️ One manual step remaining
-Add the Render redirect URI to Google OAuth credentials:
-1. Go to https://console.cloud.google.com/auth/clients?project=do-i-want-to-know
-2. Click the "Do I Want To Know" client
-3. Under "Authorized redirect URIs", click "+ Add URI"
-4. Add: `https://do-i-want-to-know.onrender.com/auth/google/callback`
-5. Save
+### Known caveats
+- New extraction rules (categories, `eventDate`, promo codes, trials) apply to **newly-synced mail only** — existing rows need a re-sync or a manual edit.
+- Renewal dates are **predictions**; unusual-charge alerts need ≥3 prior charges per vendor to learn a norm.
 
-### 🔜 Next steps
-- Complete the manual OAuth redirect URI step above
-- Test full OAuth + sync + Wrapped flow on a real device via Expo Go
-
-### 📝 Decisions made
-- **Hosting: Render, not Vercel** — Vercel serverless functions time out at 10s (free) / 60s (Pro), which is too short for `/emails/sync` (fetches 200 emails + 8 batched Claude calls = 30–120s). Render runs a persistent Express server with no timeout limit. Downside: ~30s cold start after inactivity, acceptable for a personal tool.
-- **Model: `claude-haiku-4-5`** — switched from `claude-opus-4-5`; ~20× cheaper and sufficient for structured JSON extraction from email metadata.
-
-### 💡 Future ideas (post-launch)
-- Add a "Disconnect Gmail" button
-- Improve Wrapped UI with charts / animations
-- Add year filter to see stats for a specific year
-- Surface more insights (e.g. "you spend most on Tuesdays", subscription cost per month)
+### Future ideas
+- **Downloadable share card** (1080×1920 year-in-review image) — the main word-of-mouth play.
+- **OAuth verification** (incl. CASA security assessment for the restricted `gmail.readonly` scope) to open up beyond test users.
 
 ---
 
@@ -406,4 +399,5 @@ This project went through several pivots in a series of Claude Code sessions:
 - Use `npm.cmd` instead of `npm` in PowerShell to avoid `.ps1` execution policy errors
 - Use `npm install --ignore-scripts` to avoid native build failures in Expo
 - The `prisma` package must be in `dependencies` (not devDependencies) because `start:prod` calls it at runtime
-- The two migrations are additive — the second one drops the old survey tables and adds Gmail/OAuth/ledger tables
+- `backend` build script runs `prisma generate` before `tsc`, so a fresh deploy never compiles against a stale client (this caused a `Property 'budget' does not exist` failure once)
+- Migrations are additive and live in `backend/prisma/migrations/` (see the tree above) — they auto-apply via `prisma migrate deploy` on deploy
