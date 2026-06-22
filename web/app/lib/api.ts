@@ -2,6 +2,24 @@
 // bearer session token (obtained after Gmail OAuth, see exchangeCode). The token
 // — not the user id — is the credential, and it travels in the Authorization
 // header, never in the URL.
+//
+// Domain/response types live in ./types and are re-exported here, so existing
+// `import { Foo } from './api'` call sites keep working.
+
+import type {
+  UserStatus,
+  WrappedData,
+  WrappedScope,
+  SyncResult,
+  SyncOptions,
+  MonitorData,
+  Transaction,
+  UpcomingItem,
+  Renewal,
+  Promotion,
+} from './types'
+
+export type * from './types'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
@@ -38,6 +56,9 @@ async function fetchWithTimeout(url: string, opts: RequestInit = {}, ms = 60000)
   }
 }
 
+/** Thrown when the Gmail token has expired/been revoked and the user must reconnect. */
+export class ReauthError extends Error {}
+
 // Authenticated fetch: attaches the bearer token and turns a 401 reauth response
 // into a ReauthError (after dropping the dead token) so the UI can prompt a
 // reconnect instead of silently showing an error.
@@ -54,147 +75,7 @@ async function authedFetch(url: string, opts: RequestInit = {}, ms = 60000): Pro
   return res
 }
 
-export interface UserStatus {
-  id: string
-  email: string | null
-  connected: boolean
-  lastSyncedAt?: string | null
-  entryCount?: number       // emails stored as records
-  examinedCount?: number    // emails evaluated by Claude
-  oldestDate?: string | null
-  caughtUp?: boolean
-}
-
-export interface SubscriptionInsight {
-  vendor: string
-  monthlyEstimate: number
-  lastAmount: number | null
-  cadence: 'weekly' | 'monthly' | 'annual'
-  lastCharge: string
-  chargeCount: number
-  active: boolean
-}
-
-export interface SpammerStat {
-  vendor: string
-  count: number
-  senderEmail: string | null
-  unsubscribe: string | null
-}
-
-export interface WrappedStats {
-  totalSpend: number
-  refundTotal: number
-  byCategory: Record<string, { count: number; spend: number }>
-  topVendors: { vendor: string; count: number }[]
-  mostExpensive: { vendor: string; amount: number; description: string; date: string; emailId: string; termMonths: number | null } | null
-  monthlySpend: Record<string, number>
-  subscriptions: string[]
-  subscriptionCount: number
-  subscriptionInsights: SubscriptionInsight[]
-  monthlySubscriptionCost: number
-  annualSubscriptionCost: number
-  topSpammers: SpammerStat[]
-  charities: { vendor: string; count: number; total: number }[]
-  charityTotal: number
-  funFacts?: { emoji: string; label: string; value: string; detail?: string }[]
-}
-
-export interface WrappedData {
-  connected: boolean
-  email: string | null
-  totalEntries: number
-  year: number | null
-  from?: string | null
-  to?: string | null
-  availableYears: number[]
-  availableMonths?: string[]   // YYYY-MM, newest first
-  stats: WrappedStats | null
-}
-
-// How the Wrapped summary is scoped.
-export type WrappedScope =
-  | { mode: 'total' }
-  | { mode: 'year'; year: number }
-  | { mode: 'month'; month: string }            // YYYY-MM
-  | { mode: 'custom'; from: string; to: string } // YYYY-MM-DD … YYYY-MM-DD
-
-export interface SyncResult {
-  synced: number
-  total: number
-  examinedCount?: number
-  oldestDate?: string | null
-  caughtUp?: boolean
-  message?: string
-}
-
-export interface SyncOptions {
-  lookbackDays?: number
-  maxEmails?: number
-}
-
-/** Thrown when the Gmail token has expired/been revoked and the user must reconnect. */
-export class ReauthError extends Error {}
-
-// ── Monitor deck ───────────────────────────────────────────────────────────
-export interface KpiPair {
-  value: number
-  prev: number
-  deltaPct: number | null
-}
-export interface MonitorAnalytics {
-  months: string[]
-  categories: string[]
-  countByCategory: Record<string, number[]>
-  spendByCategory: Record<string, number[]>
-}
-export interface MonitorFlag {
-  kind: 'up' | 'down' | 'new' | 'info'
-  text: string
-}
-export interface TrendChange {
-  fromLabel: string
-  toLabel: string
-  from: number
-  to: number
-  deltaPct: number | null
-}
-export interface MonitorData {
-  connected: boolean
-  email: string | null
-  empty: boolean
-  period: 'month' | 'year'
-  currentLabel?: string
-  previousLabel?: string
-  kpis?: {
-    spend: KpiPair
-    transactions: KpiPair
-    subscriptionSpend: KpiPair
-    promoEmails: KpiPair
-    donations: KpiPair
-  }
-  analytics?: MonitorAnalytics
-  subscriptions?: {
-    monthlyBurn: number
-    activeCount: number
-    newlyDetected: { vendor: string; monthlyEstimate: number }[]
-    priceChanges: { vendor: string; from: number; to: number }[]
-    renewals?: Renewal[]
-  }
-  topSenders?: { vendor: string; count: number; prevCount: number }[]
-  budgets?: BudgetProgress[]
-  flags?: MonitorFlag[]
-  trend?: { mom: TrendChange | null; yoy: TrendChange | null }
-}
-
-export interface BudgetProgress {
-  category: string
-  label: string
-  amount: number
-  spent: number
-  pct: number
-}
-
+// ── Budgets ──────────────────────────────────────────────────────────────────
 export async function setBudget(userId: string, category: string, amount: number): Promise<void> {
   const res = await authedFetch(`${API}/budgets/${encodeURIComponent(userId)}`, {
     method: 'PUT',
@@ -204,29 +85,14 @@ export async function setBudget(userId: string, category: string, amount: number
   if (!res.ok) throw new Error('Could not save budget')
 }
 
+// ── Monitor deck ─────────────────────────────────────────────────────────────
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
   const res = await authedFetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
   if (!res.ok) throw new Error('Could not load the monitor')
   return res.json()
 }
 
-// ── Audit / transactions ───────────────────────────────────────────────────
-export interface Transaction {
-  id: string
-  date: string
-  category: string
-  vendor: string
-  amount: number | null      // original amount, in `currency`
-  currency: string
-  amountUsd: number | null   // normalized to USD (for totals + cross-currency sort)
-  description: string
-  emailId: string
-  senderEmail: string | null
-  unsubscribe: string | null
-  termMonths: number | null
-  categoryLocked?: boolean
-}
-
+// ── Audit / transactions ─────────────────────────────────────────────────────
 export async function getTransactions(userId: string): Promise<Transaction[]> {
   const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load transactions')
@@ -275,24 +141,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
   return /^(https?:|mailto:)/i.test(url.trim()) ? url : undefined
 }
 
-// ── Upcoming events (deliveries, flights, check-ins, tickets) + renewals ────
-export interface UpcomingItem {
-  id: string
-  category: string
-  vendor: string
-  description: string
-  eventDate: string
-  emailId: string
-}
-
-export interface Renewal {
-  vendor: string
-  amount: number | null
-  cadence: 'weekly' | 'monthly' | 'annual'
-  date: string
-  daysAway: number
-}
-
+// ── Upcoming events + renewals ────────────────────────────────────────────────
 export async function getUpcoming(userId: string): Promise<{ upcoming: UpcomingItem[]; renewals: Renewal[] }> {
   const res = await authedFetch(`${API}/upcoming/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load upcoming')
@@ -300,17 +149,7 @@ export async function getUpcoming(userId: string): Promise<{ upcoming: UpcomingI
   return { upcoming: data.upcoming ?? [], renewals: data.renewals ?? [] }
 }
 
-// ── Promotions (active discounts + promo codes) ─────────────────────────────
-export interface Promotion {
-  id: string
-  vendor: string
-  description: string
-  promoCode: string | null
-  discount: string | null
-  expiresAt: string | null
-  emailId: string
-}
-
+// ── Promotions ────────────────────────────────────────────────────────────────
 export async function getPromotions(userId: string): Promise<Promotion[]> {
   const res = await authedFetch(`${API}/promotions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load promotions')
@@ -318,7 +157,7 @@ export async function getPromotions(userId: string): Promise<Promotion[]> {
   return data.promotions ?? []
 }
 
-// ── Accepted tags (cross-device) ───────────────────────────────────────────
+// ── Accepted tags (cross-device) ──────────────────────────────────────────────
 export async function getAcceptances(userId: string): Promise<string[]> {
   const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load accepted tags')
@@ -337,6 +176,7 @@ export async function setAcceptance(userId: string, vendor: string, accepted: bo
   return data.vendors ?? []
 }
 
+// ── Auth / bootstrap ──────────────────────────────────────────────────────────
 export async function upsertUser(id: string): Promise<UserStatus> {
   // Sends the bearer token if we have one (so a connected device gets its real
   // status); without it the server safely reports connected:false.
@@ -394,6 +234,7 @@ export async function disconnectGmail(): Promise<void> {
   }
 }
 
+// ── Wrapped ───────────────────────────────────────────────────────────────────
 export async function getWrapped(userId: string, scope: WrappedScope = { mode: 'total' }): Promise<WrappedData> {
   let qs = ''
   if (scope.mode === 'year') {
@@ -411,9 +252,9 @@ export async function getWrapped(userId: string, scope: WrappedScope = { mode: '
 }
 
 /**
- * Downloads the user's data as an Excel workbook. The export endpoint now needs
- * the bearer token, which a plain <a href> navigation can't send — so we fetch
- * the file as a blob (with the auth header) and trigger the download from it.
+ * Downloads the user's data as an Excel workbook. The export endpoint needs the
+ * bearer token, which a plain <a href> navigation can't send — so we fetch the
+ * file as a blob (with the auth header) and trigger the download from it.
  */
 export async function downloadExcel(userId: string): Promise<void> {
   const res = await authedFetch(`${API}/export/${encodeURIComponent(userId)}`)
@@ -432,6 +273,7 @@ export async function downloadExcel(userId: string): Promise<void> {
   URL.revokeObjectURL(url)
 }
 
+// ── Email sync ────────────────────────────────────────────────────────────────
 export async function syncEmails(userId: string, opts: SyncOptions = {}): Promise<SyncResult> {
   const res = await fetch(`${API}/emails/sync`, {
     method: 'POST',

@@ -1,19 +1,13 @@
 'use client'
 
-import { Fragment, useState } from 'react'
+import { Fragment } from 'react'
 import { downloadExcel, gmailMessageUrl, safeHref, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
 import { catLabel, catEmoji } from '../lib/categories'
 import { money } from '../lib/format'
 import { fmtDate, monthYear, relativeTime } from '../lib/dates'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { SpendChart } from './SpendChart'
-
-function monthLabel(m: string): string {
-  const [y, mo] = m.split('-').map(Number)
-  if (!y || !mo) return m
-  return new Date(y, mo - 1, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-}
-const todayISO = () => new Date().toISOString().slice(0, 10)
+import { ScopePicker, monthLabel } from './ScopePicker'
 
 export function WrappedView({
   userId,
@@ -45,10 +39,6 @@ export function WrappedView({
   // ── Scope picker (Total / Yearly / Monthly / Custom window) ────────────────
   const availableYears = data.availableYears ?? []
   const availableMonths = data.availableMonths ?? []
-  const earliestMonth = availableMonths.length ? availableMonths[availableMonths.length - 1] : null
-  const [customOpen, setCustomOpen] = useState(false)
-  const [customFrom, setCustomFrom] = useState(earliestMonth ? `${earliestMonth}-01` : '')
-  const [customTo, setCustomTo] = useState(todayISO())
 
   const scopeLabel = () => {
     if (scope.mode === 'year') return ` · ${scope.year}`
@@ -56,7 +46,6 @@ export function WrappedView({
     if (scope.mode === 'custom') return ` · ${scope.from} → ${scope.to}`
     return ''
   }
-  const segCls = (m: WrappedScope['mode']) => `seg-btn${scope.mode === m && !customOpen ? ' active' : ''}`
 
   // ── Expandable row details (lazy-load the full transaction list once) ──────
   const { txns, state: txnState, open, toggle, retry } = useTxnDrilldown(userId)
@@ -169,45 +158,13 @@ export function WrappedView({
       </div>
 
       {stats && (
-        <div className="scope no-print">
-          <div className="seg scope-seg">
-            <button className={segCls('total')} disabled={scopeLoading}
-              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'total' }) }}>Total</button>
-            <button className={segCls('year')} disabled={scopeLoading || availableYears.length === 0}
-              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'year', year: scope.mode === 'year' ? scope.year : availableYears[0] }) }}>Yearly</button>
-            <button className={segCls('month')} disabled={scopeLoading || availableMonths.length === 0}
-              onClick={() => { setCustomOpen(false); onScopeChange({ mode: 'month', month: scope.mode === 'month' ? scope.month : availableMonths[0] }) }}>Monthly</button>
-            <button className={`seg-btn${scope.mode === 'custom' || customOpen ? ' active' : ''}`} disabled={scopeLoading}
-              onClick={() => setCustomOpen(true)}>Custom</button>
-          </div>
-
-          {scope.mode === 'year' && !customOpen && (
-            <div className="scope-options">
-              {availableYears.map((y) => (
-                <button key={y} className={`year-btn${scope.mode === 'year' && scope.year === y ? ' active' : ''}`}
-                  disabled={scopeLoading} onClick={() => onScopeChange({ mode: 'year', year: y })}>{y}</button>
-              ))}
-            </div>
-          )}
-
-          {scope.mode === 'month' && !customOpen && (
-            <div className="scope-options">
-              <select className="audit-select" value={scope.month} disabled={scopeLoading}
-                onChange={(e) => onScopeChange({ mode: 'month', month: e.target.value })}>
-                {availableMonths.map((m) => <option key={m} value={m}>{monthLabel(m)}</option>)}
-              </select>
-            </div>
-          )}
-
-          {customOpen && (
-            <div className="scope-options scope-custom">
-              <label>From <input type="date" value={customFrom} max={customTo || todayISO()} onChange={(e) => setCustomFrom(e.target.value)} /></label>
-              <label>To <input type="date" value={customTo} min={customFrom} max={todayISO()} onChange={(e) => setCustomTo(e.target.value)} /></label>
-              <button className="btn btn-outline" disabled={scopeLoading || !customFrom || !customTo || customFrom > customTo}
-                onClick={() => onScopeChange({ mode: 'custom', from: customFrom, to: customTo })}>Apply</button>
-            </div>
-          )}
-        </div>
+        <ScopePicker
+          scope={scope}
+          onScopeChange={onScopeChange}
+          scopeLoading={scopeLoading}
+          availableYears={availableYears}
+          availableMonths={availableMonths}
+        />
       )}
 
       {!stats ? (
