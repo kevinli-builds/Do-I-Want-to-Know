@@ -1,11 +1,20 @@
 import { Router } from 'express'
+import { timingSafeEqual } from 'node:crypto'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
 import { makeRateLimiter } from '../lib/rateLimit'
+import { EMAIL_RE } from '../lib/validators'
 
 const router = Router()
 
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+// Constant-time string compare so the admin key can't be recovered byte-by-byte
+// via response-timing. Returns false on any length/encoding mismatch.
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a)
+  const bb = Buffer.from(b)
+  if (ab.length !== bb.length) return false
+  return timingSafeEqual(ab, bb)
+}
 
 // This endpoint is unauthenticated by design (people requesting access don't
 // have a session yet), and each new email writes a DB row + pings the owner's
@@ -64,8 +73,8 @@ router.post('/request', asyncHandler(async (req, res) => {
 // access logs, browser history, or referrers.
 router.get('/requests', asyncHandler(async (req, res) => {
   const key = process.env.ADMIN_KEY
-  const provided = req.header('x-admin-key')
-  if (!key || provided !== key) return void res.status(403).json({ error: 'Forbidden' })
+  const provided = req.header('x-admin-key') ?? ''
+  if (!key || !safeEqual(provided, key)) return void res.status(403).json({ error: 'Forbidden' })
   const requests = await prisma.accessRequest.findMany({ orderBy: { createdAt: 'desc' } })
   res.json({ requests })
 }))
