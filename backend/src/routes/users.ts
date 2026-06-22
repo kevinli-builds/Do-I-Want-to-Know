@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
 import { userIdFromRequest, AUTH_ENFORCED } from '../lib/session'
+import { getLedgerSummary, type LedgerSummary } from '../lib/ledger'
 
 const router = Router()
 
@@ -10,7 +11,7 @@ const RATE_LIMIT_HOURS = Number(process.env.SYNC_RATE_LIMIT_HOURS ?? 24)
 function statusPayload(user: {
   id: string; email: string | null; createdAt: Date; lastSyncedAt: Date | null
   oauthToken: { id: string } | null
-}, entryCount: number, oldest: { date: Date } | null, examinedCount: number) {
+}, summary: LedgerSummary) {
   const caughtUp = !!user.lastSyncedAt && Date.now() - user.lastSyncedAt.getTime() < RATE_LIMIT_HOURS * 3600 * 1000
   return {
     id: user.id,
@@ -18,9 +19,9 @@ function statusPayload(user: {
     connected: !!user.oauthToken,
     createdAt: user.createdAt,
     lastSyncedAt: user.lastSyncedAt,
-    entryCount,                 // emails stored as records (LedgerEntry)
-    examinedCount,              // emails evaluated by Claude (ProcessedEmail)
-    oldestDate: oldest?.date ?? null,
+    entryCount: summary.entryCount,        // emails stored as records (LedgerEntry)
+    examinedCount: summary.examinedCount,  // emails evaluated by Claude (ProcessedEmail)
+    oldestDate: summary.oldestDate,
     caughtUp,
   }
 }
@@ -49,12 +50,8 @@ router.post('/', asyncHandler(async (req, res) => {
       update: {},
       include: { oauthToken: { select: { id: true } } },
     })
-    const [entryCount, oldest, examinedCount] = await Promise.all([
-      prisma.ledgerEntry.count({ where: { userId: user.id } }),
-      prisma.ledgerEntry.findFirst({ where: { userId: user.id }, orderBy: { date: 'asc' }, select: { date: true } }),
-      prisma.processedEmail.count({ where: { userId: user.id } }),
-    ])
-    return void res.json(statusPayload(user, entryCount, oldest, examinedCount))
+    const summary = await getLedgerSummary(user.id)
+    return void res.json(statusPayload(user, summary))
   }
 
   // Unauthenticated / new device with auth enforced: ensure a row exists for the

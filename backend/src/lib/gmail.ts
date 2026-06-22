@@ -1,6 +1,7 @@
 import { google, gmail_v1 } from 'googleapis'
 import { prisma } from './prisma'
 import { encryptSecret, decryptSecret } from './crypto'
+import { EMAIL_RE } from './validators'
 
 // How far back to look, and the max emails to ingest per sync. Configurable via
 // env so the window/volume can be tuned without a code change.
@@ -51,7 +52,7 @@ export interface RawEmail {
 export function parseSenderEmail(from: string): string | null {
   const angled = from.match(/<([^>]+)>/)
   const raw = (angled ? angled[1] : from).trim()
-  return /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(raw) ? raw.toLowerCase() : null
+  return EMAIL_RE.test(raw) ? raw.toLowerCase() : null
 }
 
 // Pick the best link out of a List-Unsubscribe header (prefer https one-click,
@@ -91,6 +92,20 @@ async function authedGmail(userId: string): Promise<gmail_v1.Gmail> {
 }
 
 const clamp = (n: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, n))
+
+// Resolve per-sync overrides to the actual bounds used. Centralized so the sync
+// route's "caught up?" check (newIds.length < maxEmails) uses the SAME clamped
+// number this module pages to — otherwise a tiny client-supplied maxEmails could
+// make caughtUp never go true and the cooldown never engage.
+export function resolveSyncBounds(opts?: { lookbackDays?: number; maxEmails?: number }): {
+  lookbackDays: number
+  maxEmails: number
+} {
+  return {
+    lookbackDays: clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650), // up to ~10 years
+    maxEmails: clamp(Math.round(opts?.maxEmails ?? MAX_EMAILS), 10, 10000),
+  }
+}
 
 // Page a query newest → older, collecting IDs that aren't already in `seen`
 // (already processed) or `collected` (this run), until `out` reaches `need` or
@@ -132,8 +147,7 @@ export async function listNewEmailIds(
   seen: Set<string>,
   opts?: { lookbackDays?: number; maxEmails?: number }
 ): Promise<string[]> {
-  const lookbackDays = clamp(Math.round(opts?.lookbackDays ?? LOOKBACK_DAYS), 30, 3650) // up to ~10 years
-  const maxEmails = clamp(Math.round(opts?.maxEmails ?? MAX_EMAILS), 10, 10000)
+  const { lookbackDays, maxEmails } = resolveSyncBounds(opts)
 
   const gmail = await authedGmail(userId)
   const after = Math.floor((Date.now() - lookbackDays * 24 * 60 * 60 * 1000) / 1000)

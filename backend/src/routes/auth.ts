@@ -7,6 +7,7 @@ import { logError } from '../lib/log'
 import { newToken, createSession, requireSession, revokeUserSessions } from '../lib/session'
 import { encryptSecret, decryptSecret } from '../lib/crypto'
 import { makeRateLimiter } from '../lib/rateLimit'
+import { scopeNeededPage, connectedPage, connectionFailedPage } from '../lib/pages'
 
 const router = Router()
 
@@ -119,15 +120,7 @@ router.get('/google/callback', async (req, res) => {
   // it now with a clear message instead of a confusing failure on first sync.
   if (!String(tokens.scope ?? '').includes('gmail.readonly')) {
     const back = safeRedirect(redirect) ?? safeRedirect(process.env.FRONTEND_URL)
-    return void res.status(400).send(`<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Gmail access needed</title>
-<style>body{font-family:system-ui,sans-serif;background:#f7f7ff;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0}
-.card{text-align:center;padding:48px 32px;max-width:440px}.x{font-size:56px}h1{color:#1a1a2e;margin:16px 0 8px;font-size:23px}
-p{color:#666;font-size:16px;line-height:1.5}a{display:inline-block;margin-top:18px;background:#6c63ff;color:#fff;text-decoration:none;padding:12px 22px;border-radius:12px;font-weight:700}</style></head>
-<body><div class="card"><div class="x">📭</div><h1>One more permission needed</h1>
-<p>To build your inbox insights, the app needs permission to <strong>read your Gmail</strong>. On the Google screen, please keep the <em>"Read your email messages and settings"</em> box checked.</p>
-${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`)
+    return void res.status(400).send(scopeNeededPage(back))
   }
 
   // Fetch the user's verified Gmail address
@@ -176,30 +169,7 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
   }
 
   // Fallback (mobile / no frontend configured): show a "close this tab" page
-  res.send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Connected!</title>
-  <style>
-    body { font-family: system-ui, sans-serif; background: #f7f7ff;
-           display: flex; align-items: center; justify-content: center;
-           min-height: 100vh; margin: 0; }
-    .card { text-align: center; padding: 48px 32px; }
-    .check { font-size: 64px; line-height: 1; }
-    h1 { color: #1a1a2e; margin: 16px 0 8px; font-size: 26px; }
-    p { color: #666; font-size: 16px; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="check">✓</div>
-    <h1>Gmail Connected!</h1>
-    <p>You can close this tab and return to the app.</p>
-  </div>
-</body>
-</html>`)
+  res.send(connectedPage())
   } catch (err) {
     // OAuth exchange / userinfo / DB failure — show a friendly page with a way
     // back, rather than a blank screen or raw stack trace.
@@ -217,33 +187,13 @@ ${back ? `<a href="${back}">Try connecting again</a>` : ''}</div></body></html>`
       : 'Something went wrong during sign-in. This is usually temporary — please try again.'
     const linkHref = expiredCode ? retry : (back ?? retry)
     const linkText = expiredCode ? 'Connect Gmail again' : 'Back to the app'
-    res.status(expiredCode ? 400 : 500).send(`<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Connection failed</title>
-  <style>
-    body { font-family: system-ui, sans-serif; background: #f7f7ff;
-           display: flex; align-items: center; justify-content: center;
-           min-height: 100vh; margin: 0; }
-    .card { text-align: center; padding: 48px 32px; max-width: 420px; }
-    .x { font-size: 56px; line-height: 1; }
-    h1 { color: #1a1a2e; margin: 16px 0 8px; font-size: 24px; }
-    p { color: #666; font-size: 16px; line-height: 1.5; }
-    a { display: inline-block; margin-top: 18px; background: #6c63ff; color: #fff;
-        text-decoration: none; padding: 12px 22px; border-radius: 12px; font-weight: 700; }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <div class="x">${expiredCode ? '⏳' : '⚠️'}</div>
-    <h1>${heading}</h1>
-    <p>${body}</p>
-    <a href="${linkHref}">${linkText}</a>
-  </div>
-</body>
-</html>`)
+    res.status(expiredCode ? 400 : 500).send(connectionFailedPage({
+      icon: expiredCode ? '⏳' : '⚠️',
+      heading,
+      body,
+      linkHref,
+      linkText,
+    }))
   }
 })
 

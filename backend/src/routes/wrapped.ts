@@ -4,6 +4,7 @@ import { computeStats } from '../lib/stats'
 import { getUsdRates } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
 import { requireSession } from '../lib/session'
+import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
 router.use(requireSession)
@@ -18,11 +19,8 @@ router.use(requireSession)
 router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { oauthToken: { select: { id: true } } },
-  })
-  if (!user) return void res.status(404).json({ error: 'User not found' })
+  const user = await findUserOr404(res, userId)
+  if (!user) return
 
   const entries = await prisma.ledgerEntry.findMany({
     where: { userId },

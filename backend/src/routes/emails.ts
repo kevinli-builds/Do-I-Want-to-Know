@@ -1,10 +1,12 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
-import { listNewEmailIds, fetchMetadataForIds, gmailErrorKind } from '../lib/gmail'
+import { listNewEmailIds, fetchMetadataForIds, gmailErrorKind, resolveSyncBounds } from '../lib/gmail'
 import { extractEntries } from '../lib/extractor'
 import { asyncHandler } from '../lib/asyncHandler'
 import { logError } from '../lib/log'
 import { requireSession } from '../lib/session'
+import { getLedgerSummary } from '../lib/ledger'
+import { safeDate, optionalDate } from '../lib/dates'
 
 const router = Router()
 router.use(requireSession)
@@ -19,25 +21,6 @@ function formatWait(minutes: number): string {
   const rem = minutes % 60
   if (rem === 0) return `${hours} hour${hours === 1 ? '' : 's'}`
   return `${hours}h ${rem}m`
-}
-
-// Parse an optional date, returning null if absent/invalid (unlike safeDate,
-// which falls back to now). Used for the optional eventDate field.
-function optionalDate(s: string | undefined): Date | null {
-  if (!s) return null
-  const d = new Date(s)
-  return isNaN(d.getTime()) ? null : d
-}
-
-// Return the first parseable date among candidates, else now — prevents an
-// "Invalid Date" from Claude's output blowing up the createMany insert.
-function safeDate(...candidates: (string | undefined)[]): Date {
-  for (const c of candidates) {
-    if (!c) continue
-    const d = new Date(c)
-    if (!isNaN(d.getTime())) return d
-  }
-  return new Date()
 }
 
 // POST /emails/sync  { userId }
@@ -81,15 +64,15 @@ router.post('/sync', asyncHandler(async (req, res) => {
       select: { emailId: true },
     })
     const seen = new Set(existing.map(e => e.emailId))
-    const wantMax = Math.min(Math.round(maxEmails ?? 2000) || 2000, 10000)
+    // Use the SAME clamped bound listNewEmailIds pages to, so the caughtUp check
+    // below is accurate even for tiny/huge client-supplied maxEmails values.
+    const { maxEmails: wantMax } = resolveSyncBounds({ lookbackDays, maxEmails })
     const newIds = await listNewEmailIds(userId, seen, { lookbackDays, maxEmails })
 
     if (newIds.length === 0) {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
-      const total = await prisma.ledgerEntry.count({ where: { userId } })
-      const examined = await prisma.processedEmail.count({ where: { userId } })
-      const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-      return void res.json({ synced: 0, total, examinedCount: examined, oldestDate: oldest?.date ?? null, caughtUp: true, message: "You're all caught up" })
+      const { entryCount, examinedCount, oldestDate } = await getLedgerSummary(userId)
+      return void res.json({ synced: 0, total: entryCount, examinedCount, oldestDate, caughtUp: true, message: "You're all caught up" })
     }
 
     // 2. Fetch metadata only for the new IDs, then extract with Claude.
@@ -155,10 +138,8 @@ router.post('/sync', asyncHandler(async (req, res) => {
       await prisma.user.update({ where: { id: userId }, data: { lastSyncedAt: new Date() } })
     }
 
-    const total = await prisma.ledgerEntry.count({ where: { userId } })
-    const examined = await prisma.processedEmail.count({ where: { userId } })
-    const oldest = await prisma.ledgerEntry.findFirst({ where: { userId }, orderBy: { date: 'asc' }, select: { date: true } })
-    return void res.json({ synced: rows.length, total, examinedCount: examined, oldestDate: oldest?.date ?? null, caughtUp })
+    const { entryCount, examinedCount, oldestDate } = await getLedgerSummary(userId)
+    return void res.json({ synced: rows.length, total: entryCount, examinedCount, oldestDate, caughtUp })
   } catch (err) {
     const kind = gmailErrorKind(err)
     if (kind === 'expired') {
