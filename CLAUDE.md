@@ -237,7 +237,9 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 - **Gmail OAuth tokens are encrypted at rest** (AES-256-GCM via `lib/crypto.ts`) when `TOKEN_ENCRYPTION_KEY` is set — backward-compatible with existing plaintext rows. `POST /auth/disconnect` revokes the OAuth tokens + all of the user's sessions.
 - `POST /users` is the unauthenticated bootstrap: it returns full status **only** when a valid token is presented; otherwise it always answers `connected:false` (a guessed userId alone reveals nothing).
 - On a 401 `{reauth:true}` the web client drops the dead token and shows Connect.
-- **CORS is locked** to `FRONTEND_URL` (+ localhost), not `*`. The admin list uses an `X-Admin-Key` **header** (not a query param). Errors log via `lib/log.ts` (error name + truncated message only — never full objects / PII).
+- **CORS is locked** to `FRONTEND_URL` (+ localhost), not `*`. The admin list uses an `X-Admin-Key` **header** (not a query param), compared in constant time (`crypto.timingSafeEqual`). Errors log via `lib/log.ts` (error name + truncated message only — never full objects / PII).
+- **HTTP hardening** (`index.ts`): `helmet` sets security headers (CSP that allows the self-served HTML pages' inline styles, `frame-ancestors 'none'` anti-clickjacking, `X-Content-Type-Options`, `Referrer-Policy`, HSTS); `app.set('trust proxy', 1)` so `req.ip` is the real client behind Render's proxy (otherwise the per-IP limiters bucket everyone together); `express.json` is capped at 64kb.
+- **Rate limiting** (`lib/rateLimit.ts`): in-memory per-key limiter on `/auth/exchange` + `/access/request`; expired buckets are swept so the Map stays bounded.
 
 ---
 
@@ -358,7 +360,7 @@ npm start
 - **Monitor**: MoM/YoY trend narrative, KPI deltas, 12-mo analytics chart, subscription monitor + **renewal predictions**, top-senders drilldown, **budgets & alerts**, **unusual-charge alerts**, auto-flag strip.
 - **Audit**: inline category + vendor edit (+ "rename all"), Gmail deep links.
 - **Promotions** tab, **Unsubscribe** tab, **Upcoming floater** (deliveries/flights/renewals/trial-ends).
-- **Auth/security**: bearer sessions (sha256-hashed, 90d expiry), one-time OAuth handoff code, Gmail tokens encrypted at rest, locked CORS, rate-limited `/auth/exchange` + `/access/request`, PII-safe logging, `AUTH_ENFORCED` kill-switch, formula-injection-safe export.
+- **Auth/security**: bearer sessions (sha256-hashed, 90d expiry), one-time OAuth handoff code, Gmail tokens encrypted at rest, locked CORS, helmet security headers + `trust proxy`, proxy-aware rate-limited `/auth/exchange` + `/access/request`, constant-time admin-key check, PII-safe logging, `AUTH_ENFORCED` kill-switch, formula-injection-safe export.
 - **PWA**: installable (manifest + icons + service worker).
 
 ### Decisions made
