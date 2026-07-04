@@ -14,6 +14,7 @@ import { TransactionsView } from './components/TransactionsView'
 import { UnsubscribeView } from './components/UnsubscribeView'
 import { PromotionsView } from './components/PromotionsView'
 import { UpcomingFloater } from './components/UpcomingFloater'
+import { IntroTour } from './components/IntroTour'
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -40,6 +41,13 @@ export default function Home() {
   // shown the Connect screen (Render free-tier cold-start can take 30-50 s).
   const [slowStart, setSlowStart] = useState(false)
   const slowStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // First-visit tour of the dashboard (also reopenable via the ? tab button)
+  const [showTour, setShowTour] = useState(false)
+
+  const closeTour = useCallback(() => {
+    setShowTour(false)
+    try { localStorage.setItem('diwtkn_tour_seen', '1') } catch {}
+  }, [])
 
   // Restore + persist sync settings on this device
   useEffect(() => {
@@ -50,6 +58,15 @@ export default function Home() {
   }, [])
   useEffect(() => { localStorage.setItem('diwtkn_sync_years', String(syncYears)) }, [syncYears])
   useEffect(() => { localStorage.setItem('diwtkn_sync_max', String(syncMax)) }, [syncMax])
+
+  // First time the dashboard renders on this device (real or demo), open the
+  // quick tour. closeTour sets the flag, so this never re-fires afterwards.
+  useEffect(() => {
+    if (!connected || !wrapped) return
+    try {
+      if (!localStorage.getItem('diwtkn_tour_seen')) setShowTour(true)
+    } catch {}
+  }, [connected, wrapped])
 
   // Fetch fresh data from the backend and update both state + local cache.
   // Only the all-time ("total") view is cached, so the instant-load dashboard
@@ -246,6 +263,7 @@ export default function Home() {
     return (
       <>
         {demo && <DemoBanner userId={getUserId()} onExit={handleExitDemo} />}
+        {showTour && <IntroTour demo={demo} onClose={closeTour} />}
         <nav className="view-tabs no-print">
           <button
             className={`view-tab${view === 'wrapped' ? ' active' : ''}`}
@@ -276,6 +294,9 @@ export default function Home() {
             onClick={() => setView('unsubscribe')}
           >
             Unsubscribe
+          </button>
+          <button className="tour-help" onClick={() => setShowTour(true)} title="Quick tour" aria-label="Quick tour">
+            ?
           </button>
         </nav>
         {view === 'wrapped' ? (
