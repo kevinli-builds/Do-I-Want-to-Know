@@ -154,3 +154,50 @@ the next 5 years**" with a per-sub contribution bar and a "cancel one, watch
 the number drop" interaction. Amortized monthly costs already exist
 (`termMonths` logic); this is multiplication with drama. The single most
 action-driving number the app can show.
+
+---
+
+## 6. Wave 2 — after the cold open (written 2026-07-04)
+
+_State at writing: demo mode, share card, guess-before-reveal (D1), and the
+first-visit tour are LIVE. Security hardening done. The bottleneck is now
+distribution + retention, in that order. Verify state before building._
+
+### W1 — OAuth verification / CASA (the only real unlock; process > code)
+Everything reviewers need now exists (demo mode is the reviewable surface).
+An Opus session can: draft the Limited Use disclosure + security-assessment
+answers, script the demo video, audit the privacy policy against the current
+scopes, and produce the CASA submission checklist. Until this lands, every
+other growth feature is capped at 100 test users.
+
+### W2 — Weekly digest email (retention channel; no push infra needed)
+Resend free tier + a Render cron (or node-cron in-process — single instance,
+fine). Content = the Monitor trend block: MoM spend, renewals due in 14d,
+unusual charges, budget status. Opt-in flag on User, one-click unsubscribe
+via signed token link. Plain HTML, PII-minimal.
+
+### W3 — Remaining delights, in value order
+D5 subscription time machine (multiplication with drama; data exists) →
+D3 vendor relationship cards (deep-links the Unsubscribe tab) →
+D2 spending personas (share-card fodder) → D4 refund wins.
+
+### W4 — Per-user extraction learning (quiet quality moonshot)
+`categoryLocked` edits are training signal. At sync time, inject the user's
+last ~20 corrections into the extraction system prompt as few-shot pairs
+(vendor/subject → corrected category). No model training, just prompting;
+measure: % of new rows later re-corrected. Keep the cache-marked system
+prompt static and append corrections as a second block so caching still works.
+
+### W5 — Travel Wrapped (new surface, tentative)
+`travel` category + `eventDate` already capture flights/hotels/check-ins.
+A map view of the year's trips (Leaflet, client-side) + "miles flown"
+estimates from city pairs. Big wow, moderate lift; could later be its own
+share card. Do after W1-W3.
+
+### Tentative / parked
+- **Plaid/bank import**: changes the privacy story fundamentally ("we read
+  email metadata" → "we read your bank"). Park until Wrapped-from-email
+  saturates.
+- **Mobile app revival**: the PWA covers it; revisit only on user pull.
+- **January "Wrapped drop"**: seasonal campaign mechanics (year-lock default
+  scope + confetti + share prompts each January). Cheap; build in December.
