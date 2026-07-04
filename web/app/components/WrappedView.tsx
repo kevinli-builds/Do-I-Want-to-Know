@@ -1,6 +1,6 @@
 'use client'
 
-import { Fragment } from 'react'
+import { Fragment, useState } from 'react'
 import { downloadExcel, gmailMessageUrl, safeHref, type WrappedData, type WrappedScope, type Transaction } from '../lib/api'
 import { catLabel, catEmoji } from '../lib/categories'
 import { money } from '../lib/format'
@@ -8,6 +8,8 @@ import { fmtDate, monthYear, relativeTime } from '../lib/dates'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { SpendChart } from './SpendChart'
 import { ScopePicker, monthLabel } from './ScopePicker'
+import { GuessReveal } from './GuessReveal'
+import { ShareCard } from './ShareCard'
 
 export function WrappedView({
   userId,
@@ -19,6 +21,7 @@ export function WrappedView({
   onOpenUnsubscribe,
   onOpenAudit,
   onDisconnect,
+  demo = false,
 }: {
   userId: string
   data: WrappedData
@@ -29,8 +32,10 @@ export function WrappedView({
   onOpenUnsubscribe?: () => void
   onOpenAudit?: () => void
   onDisconnect?: () => void
+  demo?: boolean
 }) {
   const stats = data.stats
+  const [sharing, setSharing] = useState(false)
 
   // Summary counts for the hero grid
   const marketingCount = stats?.byCategory?.marketing?.count ?? 0
@@ -143,19 +148,28 @@ export function WrappedView({
             </div>
           )}
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          {data.totalEntries > 0 && (
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          {stats && (
+            <button className="btn" onClick={() => setSharing(true)}>
+              📸 Share
+            </button>
+          )}
+          {!demo && data.totalEntries > 0 && (
             <button className="btn btn-outline" onClick={() => { downloadExcel(userId).catch(() => {}) }}>
               ⬇ Export
             </button>
           )}
-          {onDisconnect && (
+          {!demo && onDisconnect && (
             <button className="btn btn-outline" onClick={onDisconnect}>
               Disconnect
             </button>
           )}
         </div>
       </div>
+
+      {sharing && stats && (
+        <ShareCard data={data} scope={scope} userId={userId} onClose={() => setSharing(false)} />
+      )}
 
       {stats && (
         <ScopePicker
@@ -177,15 +191,20 @@ export function WrappedView({
         </div>
       ) : (
         <>
-          {/* ── Hero: Total Spend (net of refunds) ──────────────────── */}
-          <div className="card hero">
-            <h2>Net Spend{scopeLabel()}</h2>
-            <div className="big">{money(stats.totalSpend)}</div>
-            <div className="sub">
-              across {data.totalEntries} tracked emails
-              {stats.refundTotal > 0 ? ` · ${money(stats.refundTotal)} refunded` : ''}
-            </div>
-          </div>
+          {/* ── Hero: Total Spend (net of refunds), gated by "Guess before
+                 you look" — asks for a guess, then stages the reveal ────── */}
+          <GuessReveal
+            userId={userId}
+            scope={scope}
+            scopeLabel={scopeLabel()}
+            total={stats.totalSpend}
+            subtitle={
+              <>
+                across {data.totalEntries} tracked emails
+                {stats.refundTotal > 0 ? ` · ${money(stats.refundTotal)} refunded` : ''}
+              </>
+            }
+          />
 
           {/* ── Spend Over Time chart ──────────────────────────────── */}
           <SpendChart monthlySpend={stats.monthlySpend} year={scope.mode === 'year' ? scope.year : null} />

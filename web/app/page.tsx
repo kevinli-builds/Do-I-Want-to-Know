@@ -2,10 +2,12 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, setDemoMode, isDemoMode, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
+import { DEMO_USER_ID } from './lib/demo'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { monthYear } from './lib/dates'
 import { ConnectView } from './components/ConnectView'
+import { DemoBanner } from './components/DemoBanner'
 import { WrappedView } from './components/WrappedView'
 import { MonitorView } from './components/MonitorView'
 import { TransactionsView } from './components/TransactionsView'
@@ -22,6 +24,7 @@ export default function Home() {
   const [scope,        setScope]        = useState<WrappedScope>({ mode: 'total' })
   const [scopeLoading, setScopeLoading] = useState(false)
   const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'promotions' | 'unsubscribe'>('wrapped')
+  const [demo, setDemo] = useState(false)
   // Global sync state (the floating button works on every tab)
   const [syncing, setSyncing] = useState(false)
   const [syncNotice, setSyncNotice] = useState<{ text: string; error?: boolean; reauth?: boolean } | null>(null)
@@ -116,8 +119,35 @@ export default function Home() {
     setView('wrapped')
   }, [userId])
 
+  // Enter demo mode: flip the API into fixture mode and render the connected UI
+  // from sample data — no OAuth, no backend, no Claude.
+  const handleTryDemo = useCallback(async () => {
+    setDemoMode(true)
+    setDemo(true)
+    setUserId(DEMO_USER_ID)
+    setScope({ mode: 'total' })
+    setView('wrapped')
+    setCachedAt(null)
+    try { await loadWrapped(DEMO_USER_ID) } catch { /* fixtures never fail, but be safe */ }
+    setConnected(true)
+  }, [loadWrapped])
+
+  // Leave demo mode and return to the Connect screen with the real device id.
+  const handleExitDemo = useCallback(() => {
+    setDemoMode(false)
+    setDemo(false)
+    setConnected(false)
+    setWrapped(null)
+    setCachedAt(null)
+    setView('wrapped')
+    setUserId(getUserId())
+  }, [])
+
   useEffect(() => {
     async function init() {
+      // If the user is exploring the demo, don't let a (re-)run of init clobber
+      // the demo identity/state (e.g. its synchronous setUserId below).
+      if (isDemoMode()) return
       let id = getUserId()
 
       // Returning from the OAuth flow: trade the one-time code for a session
@@ -164,6 +194,9 @@ export default function Home() {
       // 2. Refresh from the backend in the background (stale-while-revalidate).
       try {
         const status = await upsertUser(id)
+        // The user may have entered demo mode while this was in flight — if so,
+        // don't clobber the demo view with the real (unconnected) status.
+        if (isDemoMode()) return
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
         setProgress({ count: status.entryCount ?? 0, examined: status.examinedCount ?? 0, oldest: status.oldestDate ?? null })
@@ -182,11 +215,12 @@ export default function Home() {
       } catch {
         // Backend unreachable / cold. Keep showing cached data if we have it;
         // otherwise fall back to the Connect screen.
+        if (isDemoMode()) return
         if (slowStartTimerRef.current) clearTimeout(slowStartTimerRef.current)
         setSlowStart(false)
         if (!haveCache) setConnected(false)
       } finally {
-        setLoading(false)
+        if (!isDemoMode()) setLoading(false)
       }
     }
 
@@ -211,6 +245,7 @@ export default function Home() {
   if (connected && wrapped) {
     return (
       <>
+        {demo && <DemoBanner userId={getUserId()} onExit={handleExitDemo} />}
         <nav className="view-tabs no-print">
           <button
             className={`view-tab${view === 'wrapped' ? ' active' : ''}`}
@@ -254,6 +289,7 @@ export default function Home() {
             onOpenUnsubscribe={() => setView('unsubscribe')}
             onOpenAudit={() => setView('audit')}
             onDisconnect={handleDisconnect}
+            demo={demo}
           />
         ) : view === 'monitor' ? (
           <MonitorView userId={userId} refreshKey={refreshKey} />
@@ -272,7 +308,8 @@ export default function Home() {
         {/* Upcoming deliveries / flights / events — top-right floater */}
         <UpcomingFloater userId={userId} refreshKey={refreshKey} />
 
-        {/* Floating sync — available on every tab */}
+        {/* Floating sync — available on every tab (hidden in demo mode) */}
+        {!demo && (
         <div className="fab-wrap no-print">
           {syncNotice && (
             <div className={`fab-toast${syncNotice.error ? ' error' : ''}`}>
@@ -331,9 +368,10 @@ export default function Home() {
             </button>
           </div>
         </div>
+        )}
       </>
     )
   }
 
-  return <ConnectView userId={userId} slowStart={slowStart} />
+  return <ConnectView userId={userId} slowStart={slowStart} onTryDemo={handleTryDemo} />
 }

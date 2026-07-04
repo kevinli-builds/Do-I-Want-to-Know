@@ -19,11 +19,24 @@ import type {
   Promotion,
 } from './types'
 
+import {
+  demoWrapped, demoMonitor, demoTransactions, demoUpcoming, demoPromotions,
+} from './demo'
+
 export type * from './types'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
 const TOKEN_KEY = 'diwtkn_token'
+
+// ── Demo mode ────────────────────────────────────────────────────────────────
+// When on, every data getter returns fictional sample data computed client-side
+// (see ./demo) and every mutation is a no-op — no network, no auth, no Claude.
+// This powers the "Try the demo" experience for visitors who can't connect Gmail
+// while OAuth is invite-only. The individual view components are untouched.
+let demoMode = false
+export function setDemoMode(on: boolean): void { demoMode = on }
+export function isDemoMode(): boolean { return demoMode }
 
 export function getToken(): string | null {
   if (typeof window === 'undefined') return null
@@ -77,6 +90,7 @@ async function authedFetch(url: string, opts: RequestInit = {}, ms = 60000): Pro
 
 // ── Budgets ──────────────────────────────────────────────────────────────────
 export async function setBudget(userId: string, category: string, amount: number): Promise<void> {
+  if (demoMode) return
   const res = await authedFetch(`${API}/budgets/${encodeURIComponent(userId)}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
@@ -87,6 +101,7 @@ export async function setBudget(userId: string, category: string, amount: number
 
 // ── Monitor deck ─────────────────────────────────────────────────────────────
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
+  if (demoMode) return demoMonitor(period)
   const res = await authedFetch(`${API}/monitor/${encodeURIComponent(userId)}?period=${period}`)
   if (!res.ok) throw new Error('Could not load the monitor')
   return res.json()
@@ -94,6 +109,7 @@ export async function getMonitor(userId: string, period: 'month' | 'year'): Prom
 
 // ── Audit / transactions ─────────────────────────────────────────────────────
 export async function getTransactions(userId: string): Promise<Transaction[]> {
+  if (demoMode) return demoTransactions()
   const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load transactions')
   const data = await res.json()
@@ -106,6 +122,7 @@ export async function updateTransaction(
   id: string,
   patch: { category?: string; vendor?: string },
 ): Promise<void> {
+  if (demoMode) return
   const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/${encodeURIComponent(id)}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
@@ -116,6 +133,7 @@ export async function updateTransaction(
 
 /** Rename every record with vendor == `from` to `to`. Returns the count updated. */
 export async function renameVendorAll(userId: string, from: string, to: string): Promise<number> {
+  if (demoMode) return 0
   const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/rename-vendor`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -143,6 +161,7 @@ export function safeHref(url: string | null | undefined): string | undefined {
 
 // ── Upcoming events + renewals ────────────────────────────────────────────────
 export async function getUpcoming(userId: string): Promise<{ upcoming: UpcomingItem[]; renewals: Renewal[] }> {
+  if (demoMode) return demoUpcoming()
   const res = await authedFetch(`${API}/upcoming/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load upcoming')
   const data = await res.json()
@@ -151,6 +170,7 @@ export async function getUpcoming(userId: string): Promise<{ upcoming: UpcomingI
 
 // ── Promotions ────────────────────────────────────────────────────────────────
 export async function getPromotions(userId: string): Promise<Promotion[]> {
+  if (demoMode) return demoPromotions()
   const res = await authedFetch(`${API}/promotions/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load promotions')
   const data = await res.json()
@@ -159,6 +179,7 @@ export async function getPromotions(userId: string): Promise<Promotion[]> {
 
 // ── Accepted tags (cross-device) ──────────────────────────────────────────────
 export async function getAcceptances(userId: string): Promise<string[]> {
+  if (demoMode) return []
   const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not load accepted tags')
   const data = await res.json()
@@ -166,6 +187,7 @@ export async function getAcceptances(userId: string): Promise<string[]> {
 }
 
 export async function setAcceptance(userId: string, vendor: string, accepted: boolean): Promise<string[]> {
+  if (demoMode) return accepted ? [vendor] : []
   const res = await authedFetch(`${API}/acceptances/${encodeURIComponent(userId)}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -236,6 +258,7 @@ export async function disconnectGmail(): Promise<void> {
 
 // ── Wrapped ───────────────────────────────────────────────────────────────────
 export async function getWrapped(userId: string, scope: WrappedScope = { mode: 'total' }): Promise<WrappedData> {
+  if (demoMode) return demoWrapped(scope)
   let qs = ''
   if (scope.mode === 'year') {
     qs = `?year=${scope.year}`
@@ -257,6 +280,7 @@ export async function getWrapped(userId: string, scope: WrappedScope = { mode: '
  * file as a blob (with the auth header) and trigger the download from it.
  */
 export async function downloadExcel(userId: string): Promise<void> {
+  if (demoMode) throw new Error('Export is disabled in demo mode')
   const res = await authedFetch(`${API}/export/${encodeURIComponent(userId)}`)
   if (!res.ok) throw new Error('Could not export your data')
   const blob = await res.blob()

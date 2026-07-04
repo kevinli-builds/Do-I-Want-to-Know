@@ -1240,3 +1240,163 @@ body {
   .chart-fill, .chart-fill.peak { background: #6c63ff !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .delta, .flag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+
+/* ── Guess before you look (D1) ─────────────────────────────────────────────── */
+.guess-hero { text-align: center; }
+.guess-sub {
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 14px;
+  margin: 2px 0 18px;
+}
+.guess-input-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 14px;
+  padding: 6px 18px;
+  margin-bottom: 18px;
+}
+.guess-currency { color: #fff; font-size: 34px; font-weight: 800; }
+.guess-input {
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 44px;
+  font-weight: 800;
+  width: 220px;
+  text-align: center;
+}
+.guess-input::placeholder { color: rgba(255, 255, 255, 0.5); }
+.guess-actions { display: flex; gap: 14px; align-items: center; justify-content: center; }
+.guess-hero .link-btn { color: rgba(255, 255, 255, 0.85); }
+.guess-hero .link-btn:hover { color: #fff; }
+.guess-drumroll {
+  font-size: 46px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  animation: guess-pulse 0.7s ease-in-out infinite;
+}
+@keyframes guess-pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+.guess-pop { animation: guess-reveal 0.5s cubic-bezier(0.2, 1.4, 0.5, 1); }
+@keyframes guess-reveal { 0% { transform: scale(0.7); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+.guess-delta {
+  margin-top: 12px;
+  display: inline-block;
+  padding: 8px 16px;
+  border-radius: 12px;
+  font-size: 15px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #fff;
+}
+.guess-delta strong { font-weight: 800; }
+
+/* ── Share card (P1) ────────────────────────────────────────────────────────── */
+.share-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 18, 45, 0.72);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 24px;
+  overflow-y: auto;
+  z-index: 100;
+}
+.share-modal {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 20px;
+  max-width: 420px;
+  width: 100%;
+  margin: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.share-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.share-head h2 { font-size: 18px; font-weight: 700; color: var(--ink); }
+.share-preview {
+  display: block;
+  width: 100%;
+  max-width: 300px;
+  margin: 0 auto 14px;
+  border-radius: 14px;
+  box-shadow: 0 8px 24px rgba(108, 99, 255, 0.35);
+}
+.share-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.share-hint { font-size: 12px; color: var(--muted); text-align: center; margin-bottom: 16px; }
+.share-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* ── Connect trust list + demo entry ────────────────────────────────────────── */
+.demo-btn { margin-top: 10px; }
+.trust-list {
+  list-style: none;
+  text-align: left;
+  max-width: 380px;
+  margin: 18px auto 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.trust-list li {
+  position: relative;
+  padding-left: 26px;
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.45;
+}
+.trust-list li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  top: 0;
+  color: #2ca36b;
+  font-weight: 800;
+}
+.trust-list strong { color: var(--ink); }
+
+/* ── Demo banner ────────────────────────────────────────────────────────────── */
+.demo-banner {
+  background: linear-gradient(135deg, #6c63ff, #8e7bff);
+  color: #fff;
+  border-radius: 14px;
+  padding: 12px 16px;
+  margin: 0 auto 14px;
+  max-width: 760px;
+  box-shadow: 0 6px 20px rgba(108, 99, 255, 0.3);
+}
+.demo-banner-main { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.demo-badge {
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+.demo-banner-text { font-size: 14px; }
+.demo-banner-text strong { font-weight: 800; }
+.demo-banner-actions { display: flex; gap: 12px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+.demo-banner-actions .btn { padding: 7px 16px; font-size: 13px; }
+.demo-banner .link-btn { color: rgba(255, 255, 255, 0.9); }
+.demo-banner .link-btn:hover { color: #fff; }
+.demo-banner .link-btn.ghost { color: rgba(255, 255, 255, 0.7); }
+.demo-request-done { margin-top: 10px; font-size: 14px; font-weight: 600; }
+.demo-request-form { display: flex; gap: 8px; align-items: center; margin-top: 12px; flex-wrap: wrap; }
+.demo-request-form .request-input { flex: 1; min-width: 180px; }
+.demo-banner .request-error { color: #ffe0e0; font-size: 13px; }
+
+@media (max-width: 640px) {
+  .demo-banner-actions { margin-left: 0; width: 100%; }
+  .guess-input { width: 160px; font-size: 36px; }
+}

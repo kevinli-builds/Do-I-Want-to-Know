@@ -6,9 +6,11 @@ import { startConnect, requestAccess } from '../lib/api'
 export function ConnectView({
   userId,
   slowStart = false,
+  onTryDemo,
 }: {
   userId: string
   slowStart?: boolean
+  onTryDemo?: () => void
 }) {
   const [showForm, setShowForm] = useState(false)
   const [email, setEmail] = useState('')
@@ -59,9 +61,22 @@ export function ConnectView({
       <button className="btn" disabled={!userId} onClick={() => startConnect(userId)}>
         Connect Gmail
       </button>
+
+      {onTryDemo && (
+        <button className="btn btn-outline demo-btn" onClick={onTryDemo}>
+          ✨ Try the demo — no sign-in
+        </button>
+      )}
+
+      {/* Trust — the highest-friction ask in the app, so say it up front */}
+      <ul className="trust-list">
+        <li><strong>Metadata only</strong> — sender, subject, date, snippet. Never the full body of any email.</li>
+        <li><strong>Read-only</strong> — we can’t send, delete, or change anything in your inbox.</li>
+        <li><strong>Disconnect anytime</strong> — revokes our access instantly; your saved Wrapped stays.</li>
+      </ul>
       <p className="fineprint">
-        We only read metadata (sender, subject, date, snippet) from purchase emails — never the
-        full body of any message. You can disconnect anytime.
+        Curious first? <button className="link-btn" onClick={onTryDemo}>explore the demo</button> — it’s
+        the full experience on sample data, no account needed.
       </p>
 
       {/* Request access — for people not yet added as test users */}
