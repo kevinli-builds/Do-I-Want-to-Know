@@ -164,11 +164,13 @@ first-visit tour are LIVE. Security hardening done. The bottleneck is now
 distribution + retention, in that order. Verify state before building._
 
 ### W1 — OAuth verification / CASA (the only real unlock; process > code)
-Everything reviewers need now exists (demo mode is the reviewable surface).
-An Opus session can: draft the Limited Use disclosure + security-assessment
-answers, script the demo video, audit the privacy policy against the current
-scopes, and produce the CASA submission checklist. Until this lands, every
-other growth feature is capped at 100 test users.
+**Drafted: see `docs/OAUTH_VERIFICATION.md`** (gap analysis, demo-video
+script, CASA crib sheet, order of operations). Two blockers surfaced there
+need action before submission: (1) a custom domain — `*.onrender.com` /
+`*.vercel.app` can't pass Search Console verification (user buys the domain;
+a session re-points env vars + callback URIs); (2) a **delete-my-data**
+endpoint + UI (spec in the doc — buildable by any session today). Until this
+lands, every other growth feature is capped at 100 test users.
 
 ### W2 — Weekly digest email (retention channel; no push infra needed)
 Resend free tier + a Render cron (or node-cron in-process — single instance,
