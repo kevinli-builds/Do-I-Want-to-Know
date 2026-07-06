@@ -225,3 +225,66 @@ fixes worth shipping:_
   Upcoming floater renders bottom-left at 375w — confirm it does not collide
   with the FAB stack in connected mode.
 - Landing page measured clean: no horizontal overflow, 50px+ buttons.
+
+---
+
+## 9. Depth roadmap — serving the current user (2026-07-05)
+
+_Direction change from the user: depth for the connected user over growth.
+The ledger already holds everything needed — these are analytics features,
+nearly all computable from existing `/wrapped` + `/transactions` data.
+House rules: compare the user only to THEMSELVES (never cohorts), always
+offer click-through provenance to the source emails, label estimates._
+
+### A1 — Price-increase detector (M) ⭐ (the killer depth feature)
+Subscriptions are repeated (vendor, ~amount) charges: detect steps in the
+per-vendor amount series → "Netflix: $15.49 → $17.99 in March (+16%). Your
+subscriptions cost $31/mo more than a year ago." Surface in Monitor + a
+line in Wrapped. Pure function over the ledger; fixture-tested (step
+detection needs a tolerance band for FX/tax jitter).
+
+### A2 — Cashflow calendar (M)
+Month-grid heatmap of daily spend (past) + predicted renewals plotted
+forward (renewals.ts already predicts) = "what hits next week." The single
+most requested view in any finance tool; here it needs zero new data.
+
+### A3 — Vendor drilldown pages (M)
+Tap any vendor anywhere → full analytics: monthly trend, order-size
+distribution, longest gap, category mix, refund history, first/last
+purchase. The Audit table is the editor; this is the reader.
+
+### A4 — Zombie subscription finder (S)
+Active subscription charges with no other vendor activity in 90d (no
+orders, no shipping, no marketing opens tracked — frame carefully as "you
+have not gotten mail from them besides the bill"). CTA into Unsubscribe /
+cancellation. Pairs with A1 as a "subscriptions health" panel.
+
+### A5 — What-if simulator (M) ⭐
+Interactive scenario builder: toggle off subscriptions, cap a category →
+live "saves $X/yr" recompute. Client-side over existing stats; the number
+that changes as you toggle is the persuasion mechanic. Feeds §4 D5.
+
+### A6 — Promise tracker (M, tentative)
+Match refund-promised emails to refund-received, delivery ETA (eventDate)
+to delivery-confirmed → per-vendor "keeps promises" score. Extraction
+already captures the halves; the join logic is new and fuzzy — prototype
+against real data before promising precision.
+
+### A7 — Ledger workbench (M)
+Power-user query bar over /transactions: free text + amount range + date
+range + category chips, saved views, column sort, CSV of the filtered set.
+The Audit tab grows a "filters" row rather than a new tab (IA is full).
+
+### A8 — Anomaly feedback loop (S)
+Unusual-charge alerts exist; add "expected" / "not expected" buttons that
+persist per-vendor tolerance so alerts get personal over time. One small
+table (userId, vendor, toleranceMultiplier) + threshold math change.
+
+### A9 — Annual report (S)
+Print-CSS typeset year report (all the Wrapped + Monitor content, formal
+layout) → "Save as PDF". The private, in-depth cousin of the share card.
+
+### Sequencing
+A1 + A4 together = "Subscription health" release; A2 + A5 = "Plan ahead"
+release; A3 + A7 + A8 = "Power reader" release. All backend-light; only
+A8 touches schema.
