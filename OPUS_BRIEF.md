@@ -203,3 +203,25 @@ share card. Do after W1-W3.
 - **Mobile app revival**: the PWA covers it; revisit only on user pull.
 - **January "Wrapped drop"**: seasonal campaign mechanics (year-lock default
   scope + confetti + share prompts each January). Cheap; build in December.
+
+---
+
+## 8. Mobile & web experience scan (measured 2026-07-05, 375x812 viewport)
+
+_Live-tested in demo mode. Web/desktop is clean; mobile is sound with three
+fixes worth shipping:_
+
+1. **Tab bar overflows with no affordance** ⭐ — the 5 tabs + ? exceed the
+   viewport by ~138px; it scrolls (`overflow-x: auto`) but nothing signals
+   that, so Promotions / Unsubscribe / the ? button (offscreen at x=499) are
+   undiscoverable. Fix: either the section-2 IA regroup (5 tabs → 3), or
+   cheap version now — edge fade-out gradients on `.view-tabs` + scroll the
+   active tab into view on change.
+2. **Tabs are 34px tall** — under the 44px touch minimum. Bump mobile
+   padding (`py-2.5` equivalent) in `.view-tab`.
+3. **Hero number is 22px** on mobile — the yearly total is the product; let
+   it breathe (28-32px at <640px, tabular-nums).
+- Verify on a real device (demo hides the sync FAB, untestable here): the
+  Upcoming floater renders bottom-left at 375w — confirm it does not collide
+  with the FAB stack in connected mode.
+- Landing page measured clean: no horizontal overflow, 50px+ buttons.
