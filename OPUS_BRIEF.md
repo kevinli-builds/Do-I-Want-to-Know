@@ -8,6 +8,14 @@ below is accordingly short. Verify current state before implementing._
 
 ---
 
+## 0. Status ledger (2026-07-05) + how to pick up
+
+**Shipped ✓** — demo mode, share card, guess-before-you-look (D1); first-visit tour (§5);
+OAuth/CASA verification pack (§7, `docs/OAUTH_VERIFICATION.md`); web-client type/ScopePicker refactor.
+**Next → (highest value first)** — §9 A1 price-increase detector ⭐ + A4 zombie-subs ("Subscription health" release); §9 A2 cashflow calendar + A5 what-if ("Plan ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); the **delete-my-data endpoint** (CASA blocker, spec in the OAuth doc); §3 backend tests.
+**Needs the user** — buy a custom domain (CASA blocker); set the Anthropic spend cap.
+**Parked** — new-growth features (breadth is not the bottleneck; depth is, per §9).
+
 ## 1. Product roadmap (PM)
 
 The product is feature-rich but **gated**: Google OAuth is in Testing mode

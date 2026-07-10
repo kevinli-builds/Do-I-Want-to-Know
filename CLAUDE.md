@@ -1,5 +1,16 @@
 # Do I Want To Know — Claude Context
 
+## Notes & handoff — READ FIRST when told to "go through your notes"
+**`OPUS_BRIEF.md`** (repo root) is the forward roadmap of record: PM/design/security
+audits (sections 1-3), delight ideas (4), first-visit cold opens (5, shipped), wave-2 (6),
+Fable design notes (7), mobile/web scan (8), and the depth roadmap (9) — plus a **status
+ledger at the very top** marking what has shipped vs. what is next. When asked to pick up
+the next enhancement: (1) read the brief; (2) run `git log --oneline -20` + `git status` —
+a dirty working tree means another agent is mid-flight, so choose a different area or write
+specs rather than edit the same files; (3) confirm the item is not already built; (4) build
+it with the house conventions (tests, then commit + push).
+Other notes: `docs/OAUTH_VERIFICATION.md` (verification gap analysis, demo-video script, CASA crib sheet).
+
 ## Concept
 "Spotify Wrapped, but for your Gmail inbox."
 
