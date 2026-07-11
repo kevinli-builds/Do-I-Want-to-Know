@@ -54,8 +54,14 @@ Aggregate, anonymised results (e.g. "82 people answered this question, 60% said 
 
 ## Data retention
 
-- Questions and answers are retained for as long as the app is operational.
-- If you would like your data deleted, contact us at the address below and provide your device ID (found in the app settings). We will delete all questions and answers associated with your ID within 30 days.
+- Extracted records are retained for as long as your account exists so your
+  dashboard keeps working between syncs.
+- **Delete everything yourself, instantly:** the "Delete my data" button in the
+  app permanently erases every extracted record, budget, setting, session, and
+  stored Gmail token from our servers, and revokes the app's Gmail access. This
+  is immediate and irreversible — no email or waiting period required.
+- You can also contact us at the address below and we will delete all data
+  associated with your account within 30 days.
 
 ---
 

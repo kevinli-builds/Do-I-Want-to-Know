@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { getUserId, setUserId as persistUserId } from './lib/userId'
-import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, setDemoMode, isDemoMode, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
+import { upsertUser, getWrapped, syncEmails, startConnect, exchangeCode, disconnectGmail, deleteMyData, setDemoMode, isDemoMode, ReauthError, type WrappedData, type WrappedScope } from './lib/api'
 import { DEMO_USER_ID } from './lib/demo'
 import { loadWrappedCache, saveWrappedCache, clearWrappedCache } from './lib/cache'
 import { monthYear } from './lib/dates'
@@ -134,6 +134,25 @@ export default function Home() {
     setCachedAt(null)
     setConnected(false)
     setView('wrapped')
+  }, [userId])
+
+  // Delete my data: full, irreversible server-side erasure (CASA requirement) —
+  // double-confirmed, and local state is wiped only after the server confirms.
+  const handleDeleteData = useCallback(async () => {
+    if (!window.confirm('Delete ALL your data? This permanently erases every extracted record, budget, and setting on our servers. This cannot be undone.')) return
+    if (!window.confirm('Last check: this is permanent. Your Gmail access is revoked and your entire history here is erased. Delete everything?')) return
+    try {
+      await deleteMyData()
+    } catch (e) {
+      setSyncNotice({ text: e instanceof Error ? e.message : 'Deletion failed — please try again.', error: true })
+      return
+    }
+    clearWrappedCache(userId)
+    setWrapped(null)
+    setCachedAt(null)
+    setConnected(false)
+    setView('wrapped')
+    setSyncNotice({ text: 'All your data has been deleted.', error: false })
   }, [userId])
 
   // Enter demo mode: flip the API into fixture mode and render the connected UI
@@ -310,6 +329,7 @@ export default function Home() {
             onOpenUnsubscribe={() => setView('unsubscribe')}
             onOpenAudit={() => setView('audit')}
             onDisconnect={handleDisconnect}
+            onDeleteData={handleDeleteData}
             demo={demo}
           />
         ) : view === 'monitor' ? (

@@ -21,6 +21,7 @@ export function WrappedView({
   onOpenUnsubscribe,
   onOpenAudit,
   onDisconnect,
+  onDeleteData,
   demo = false,
 }: {
   userId: string
@@ -32,6 +33,7 @@ export function WrappedView({
   onOpenUnsubscribe?: () => void
   onOpenAudit?: () => void
   onDisconnect?: () => void
+  onDeleteData?: () => void // full data erasure — irreversible, unlike disconnect
   demo?: boolean
 }) {
   const stats = data.stats
@@ -162,6 +164,16 @@ export function WrappedView({
           {!demo && onDisconnect && (
             <button className="btn btn-outline" onClick={onDisconnect}>
               Disconnect
+            </button>
+          )}
+          {!demo && onDeleteData && (
+            <button
+              className="btn btn-outline"
+              style={{ color: '#c0392b', borderColor: '#c0392b' }}
+              onClick={onDeleteData}
+              title="Permanently erase everything we store about you — unlike Disconnect, this cannot be undone"
+            >
+              Delete my data
             </button>
           )}
         </div>

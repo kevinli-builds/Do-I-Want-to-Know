@@ -256,6 +256,16 @@ export async function disconnectGmail(): Promise<void> {
   }
 }
 
+// Delete my data: full server-side erasure (ledger, examined-email markers,
+// acceptances, budgets, sessions, OAuth tokens, the user row) — irreversible,
+// unlike disconnect. Throws if the server did not confirm deletion, so the
+// caller only wipes local state on a real success.
+export async function deleteMyData(): Promise<void> {
+  const res = await authedFetch(`${API}/users/me`, { method: 'DELETE' })
+  if (!res.ok) throw new Error('Could not delete your data — please try again.')
+  clearToken()
+}
+
 // ── Wrapped ───────────────────────────────────────────────────────────────────
 export async function getWrapped(userId: string, scope: WrappedScope = { mode: 'total' }): Promise<WrappedData> {
   if (demoMode) return demoWrapped(scope)
