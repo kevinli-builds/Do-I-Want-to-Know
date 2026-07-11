@@ -11,8 +11,17 @@ below is accordingly short. Verify current state before implementing._
 ## 0. Status ledger (2026-07-05) + how to pick up
 
 **Shipped ✓** — demo mode, share card, guess-before-you-look (D1); first-visit tour (§5);
-OAuth/CASA verification pack (§7, `docs/OAUTH_VERIFICATION.md`); web-client type/ScopePicker refactor.
-**Next → (highest value first)** — §9 A1 price-increase detector ⭐ + A4 zombie-subs ("Subscription health" release); §9 A2 cashflow calendar + A5 what-if ("Plan ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); the **delete-my-data endpoint** (CASA blocker, spec in the OAuth doc); §3 backend tests.
+OAuth/CASA verification pack (§7, `docs/OAUTH_VERIFICATION.md`); web-client type/ScopePicker refactor;
+**§9 A1 + A4 backend (2026-07-11)** — `lib/subhealth.ts`: plateau-based price-step detection (FX/tax-jitter
+tolerant, promo-month outliers absorbed, `confirmed` labelling), price-driven monthly-burn delta vs a year
+ago, zombie-sub finder. Wired into `computeMonitor` (replaces the noisy last-two-amounts price check;
+`subscriptions.health` in the payload) and the flag strip — **user-visible today via Monitor flags with no
+web changes**. First backend tests landed with it (vitest, `src/lib/__tests__/`; `npm test`).
+**Next → (highest value first)** — a dedicated "Subscription health" panel in MonitorView rendering
+`subscriptions.health` (steps list w/ confirmed badge, burn-delta headline, zombie cards with Unsubscribe
+deep-links) + mirror `health` in the demo-mode monitor port; §9 A2 cashflow calendar + A5 what-if ("Plan
+ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); the **delete-my-data
+endpoint** (CASA blocker, spec in the OAuth doc); §3 remaining backend tests (extractor parsing, fx, renewals).
 **Needs the user** — buy a custom domain (CASA blocker); set the Anthropic spend cap.
 **Parked** — new-growth features (breadth is not the bottleneck; depth is, per §9).
 

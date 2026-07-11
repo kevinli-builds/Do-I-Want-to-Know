@@ -6,6 +6,7 @@ import { SPEND_CATEGORIES, CATEGORY_LABELS, type Category } from './categories'
 import { computeStats } from './stats'
 import { normalizeToUsd } from './fx'
 import { computeRenewals, type Renewal } from './renewals'
+import { computeSubHealth, type SubHealth } from './subhealth'
 
 export interface BudgetInput { category: string; amount: number }
 export interface BudgetProgress {
@@ -63,8 +64,9 @@ export interface MonitorData {
     monthlyBurn: number
     activeCount: number
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
-    priceChanges: { vendor: string; from: number; to: number }[]
+    priceChanges: { vendor: string; from: number; to: number }[] // kept for UI compat; sourced from health.steps
     renewals: Renewal[]
+    health: SubHealth // price steps + burn-delta vs a year ago + zombie subs
   }
   topSenders: { vendor: string; count: number; prevCount: number }[]
   budgets: BudgetProgress[]
@@ -286,13 +288,12 @@ export function computeMonitor(
   const activeInsights = stats.subscriptionInsights.filter(s => s.active)
   const renewals = computeRenewals(stats.subscriptionInsights, now)
 
-  // Group subscription charges by vendor (ascending date) for new/price detection
+  // Group subscription charges by vendor (ascending date) for new-sub detection
   const subByVendor: Record<string, LedgerEntry[]> = {}
   for (const e of entries) {
     if (e.category === 'subscription') (subByVendor[e.vendor] ??= []).push(e)
   }
   const newlyDetected: { vendor: string; monthlyEstimate: number }[] = []
-  const priceChanges: { vendor: string; from: number; to: number }[] = []
   for (const [vendor, list] of Object.entries(subByVendor)) {
     const sorted = [...list].sort((a, b) => a.date.getTime() - b.date.getTime())
     // New this period: the very first charge we've seen lands in the current period
@@ -300,13 +301,19 @@ export function computeMonitor(
       const est = stats.subscriptionInsights.find(s => s.vendor === vendor)?.monthlyEstimate ?? 0
       newlyDetected.push({ vendor, monthlyEstimate: est })
     }
-    // Price change: last two distinct known amounts differ
-    const amts = sorted.filter(e => e.amount != null && e.amount > 0).map(e => e.amount as number)
-    if (amts.length >= 2) {
-      const to = amts[amts.length - 1]
-      const from = amts[amts.length - 2]
-      if (Math.abs(to - from) >= 0.01) priceChanges.push({ vendor, from: round2(from), to: round2(to) })
-    }
+  }
+
+  // Subscription health (lib/subhealth.ts): plateau-based price steps (robust
+  // to FX/tax jitter and one-month promos, unlike the old last-two-amounts
+  // check), price-driven burn delta vs a year ago, and zombie subs.
+  const health = computeSubHealth(entries, stats.subscriptionInsights, now)
+  // Legacy shape for the UI: a vendor's most recent step.
+  const seenStepVendor = new Set<string>()
+  const priceChanges: { vendor: string; from: number; to: number }[] = []
+  for (const s of health.steps) {
+    if (seenStepVendor.has(s.vendor)) continue
+    seenStepVendor.add(s.vendor)
+    priceChanges.push({ vendor: s.vendor, from: s.from, to: s.to })
   }
 
   // ── Inbox-load monitor: top senders this period (+ prior count) ────────────
@@ -343,8 +350,34 @@ export function computeMonitor(
       text: `New subscription: ${n.vendor}${n.monthlyEstimate > 0 ? ` (~$${n.monthlyEstimate}/mo)` : ''}`,
     })
   }
-  for (const p of priceChanges) {
-    flags.push({ kind: 'info', text: `Price change: ${p.vendor} $${p.from} → $${p.to}` })
+  // Price steps: only recent ones are news (older steps stay in health.steps
+  // for the UI); unconfirmed steps (one charge so far) are labelled as such.
+  const STEP_NEWS_DAYS = 190 // ~6 months
+  const recentSteps = health.steps
+    .filter(s => now.getTime() - new Date(s.atDate).getTime() <= STEP_NEWS_DAYS * 86_400_000)
+    .sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))
+    .slice(0, 3)
+  for (const s of recentSteps) {
+    const dir = s.to > s.from ? 'increase' : 'drop'
+    const maybe = s.confirmed ? '' : ' (one charge so far)'
+    flags.push({
+      kind: s.to > s.from ? 'up' : 'down',
+      text: `Price ${dir}: ${s.vendor} $${s.from} → $${s.to} (${s.pct > 0 ? '+' : ''}${s.pct}%)${maybe}`,
+    })
+  }
+  if (health.monthlyDeltaVsYearAgo != null && Math.abs(health.monthlyDeltaVsYearAgo) >= 1) {
+    const d = health.monthlyDeltaVsYearAgo
+    flags.push({
+      kind: d > 0 ? 'up' : 'down',
+      text: `Your subscriptions cost $${Math.abs(d).toFixed(2)}/mo ${d > 0 ? 'more' : 'less'} than a year ago (same subs, price changes only)`,
+    })
+  }
+  for (const z of health.zombies.slice(0, 2)) {
+    const est = z.monthlyEstimate > 0 ? ` ~$${z.monthlyEstimate}/mo` : ''
+    flags.push({
+      kind: 'info',
+      text: `💤 Zombie sub? ${z.vendor}${est} — nothing but bills from them in ${z.daysQuiet} days`,
+    })
   }
   // Heads-up: subscriptions renewing within the next 7 days.
   for (const r of renewals) {
@@ -385,6 +418,7 @@ export function computeMonitor(
       newlyDetected,
       priceChanges,
       renewals,
+      health,
     },
     topSenders,
     budgets: budgetProgress,
