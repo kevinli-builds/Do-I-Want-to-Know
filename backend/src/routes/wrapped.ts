@@ -3,11 +3,12 @@ import { prisma } from '../lib/prisma'
 import { computeStats } from '../lib/stats'
 import { getUsdRates } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // GET /wrapped/:userId               → all-time stats
 // GET /wrapped/:userId?year=2025      → scoped to a calendar year

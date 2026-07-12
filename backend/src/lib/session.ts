@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto'
-import type { Request, RequestHandler } from 'express'
+import type { Request, RequestHandler, RequestParamHandler } from 'express'
 import { prisma } from './prisma'
 
 // A session token is a high-entropy random string. We store only its SHA-256
@@ -89,4 +89,26 @@ export const requireSession: RequestHandler = async (req, res, next) => {
   }
 
   res.status(401).json({ error: 'Please reconnect Gmail to continue.', reauth: true })
+}
+
+// Ownership guard for routes with a `:userId` path param. This MUST be registered
+// with `router.param('userId', enforceOwnership)` — NOT `router.use(...)`. Express
+// only populates `req.params` during route matching, which happens AFTER `use`
+// middleware runs, so a `use`-mounted check reads `req.params.userId === undefined`
+// and never fires (the bug this fixes: any valid session could read/write any
+// user's data by putting a different id in the path). A `param` callback runs after
+// extraction and after `requireSession` (a `use` middleware) has set `req.authUserId`,
+// so here the path id is present and can be compared to the token's user.
+export const enforceOwnership: RequestParamHandler = (req, res, next, id) => {
+  // Rollback mode (AUTH_ENFORCED=false): keep the legacy behaviour of trusting the
+  // path userId, matching requireSession's fallback. Only active as an emergency
+  // kill-switch; enforced by default.
+  if (!AUTH_ENFORCED) return next()
+
+  // In enforced mode requireSession has already run and 401'd any request without a
+  // valid token, so req.authUserId is guaranteed set here. Require it to match the
+  // path id.
+  if (req.authUserId && id === req.authUserId) return next()
+
+  res.status(403).json({ error: 'Forbidden' })
 }

@@ -24,8 +24,9 @@ export async function getLedgerSummary(userId: string): Promise<LedgerSummary> {
 
 // Fetch a user (with a lightweight oauthToken presence flag) or send a 404 and
 // return null. Lets a route bail with `if (!user) return` and drops the repeated
-// findUnique + 404 boilerplate. requireSession has already proven the caller owns
-// this :userId, so this only guards the "row doesn't exist" case.
+// findUnique + 404 boilerplate. The `enforceOwnership` param guard has already
+// proven the caller owns this :userId, so this only guards the "row doesn't exist"
+// case.
 export async function findUserOr404(res: Response, userId: string) {
   const user = await prisma.user.findUnique({
     where: { id: userId },

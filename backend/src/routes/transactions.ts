@@ -3,11 +3,12 @@ import { prisma } from '../lib/prisma'
 import { getUsdRates, toUsd } from '../lib/fx'
 import { CATEGORIES } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // GET /transactions/:userId
 // Returns every extracted record (newest first) so the user can audit any view
@@ -44,8 +45,9 @@ router.get('/:userId', asyncHandler(async (req, res) => {
 }))
 
 // PATCH /transactions/:userId/:id   { category?, vendor? }
-// Manually correct a record's category and/or vendor. requireSession guarantees
-// :userId is the caller; we additionally scope the update to that user's own row.
+// Manually correct a record's category and/or vendor. The `enforceOwnership`
+// param guard has proven :userId is the caller; we additionally scope the update
+// to that user's own row.
 // A category change sets categoryLocked so the entry stays user-authoritative.
 router.patch('/:userId/:id', asyncHandler(async (req, res) => {
   const { userId, id } = req.params

@@ -3,11 +3,12 @@ import { prisma } from '../lib/prisma'
 import { computeMonitor, type Period } from '../lib/monitor'
 import { getUsdRates } from '../lib/fx'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // GET /monitor/:userId?period=month|year
 // Period-over-period monitoring deck. Pure DB read — no Claude cost.

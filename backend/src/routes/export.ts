@@ -5,11 +5,12 @@ import { computeStats } from '../lib/stats'
 import { getUsdRates } from '../lib/fx'
 import { CATEGORY_LABELS } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // Purple theme matching the app's brand colour
 const PURPLE  = 'FF6C63FF'

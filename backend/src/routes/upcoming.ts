@@ -4,10 +4,11 @@ import { getUsdRates, normalizeToUsd } from '../lib/fx'
 import { computeSubscriptionInsights } from '../lib/stats'
 import { computeRenewals } from '../lib/renewals'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // GET /upcoming/:userId
 // Two forward-looking lists, both pure DB reads (no Claude):

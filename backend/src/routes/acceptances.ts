@@ -1,10 +1,11 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 // GET /acceptances/:userId → { vendors: string[] }
 // The set of vendors/senders this user has marked "Accepted".

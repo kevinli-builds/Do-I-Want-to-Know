@@ -10,6 +10,11 @@ below is accordingly short. Verify current state before implementing._
 
 ## 0. Status ledger (2026-07-05) + how to pick up
 
+**🔴 SECURITY — C1 IDOR fixed in code 2026-07-12, NEEDS RENDER REDEPLOY to go live.**
+`enforceOwnership` param guard + authz regression suite landed on `main` (details in
+§10 and the private security audit file). The fix is inert until Render rebuilds — push
+is done, so just trigger/confirm the redeploy.
+
 **Shipped ✓** — demo mode, share card, guess-before-you-look (D1); first-visit tour (§5);
 OAuth/CASA verification pack (§7, `docs/OAUTH_VERIFICATION.md`); web-client type/ScopePicker refactor;
 **§9 A1 + A4 backend (2026-07-11)** — `lib/subhealth.ts`: plateau-based price-step detection (FX/tax-jitter
@@ -322,13 +327,17 @@ _This repo is PUBLIC. Sensitive/exploitable security findings from this audit ar
 app there — read it before any roadmap work.** Below are the non-sensitive
 code-quality notes only._
 
-- **Test coverage is still the biggest quality gap** (§3.1). The single highest-
-  value new suite is an **authorization matrix** over the `:userId` routes (a token
-  minted for user A must be rejected for user B's id). Write it against the fix for
-  the security item above; it also guards every future route.
-- **`:userId` router boilerplate.** The 8 data routers are near-identical
-  (`router.use(requireSession)` + `findMany({ where: { userId } })`). Factor the
-  shared auth+ownership wiring once (the security fix is the natural place).
+- ✅ **Authorization matrix — SHIPPED (2026-07-12).** `backend/src/routes/__tests__/authz.test.ts`
+  now asserts a token minted for user A is rejected (403) for user B's id across all 8
+  `:userId` routers, plus a unit test of the `enforceOwnership` guard and an owner
+  positive control. Landed alongside the security fix (see the sensitive audit file).
+  Test coverage is still the next-biggest gap otherwise (§3.1: extractor parsing, fx,
+  renewals) — this suite is the template for the rest.
+- ✅ **`:userId` ownership wiring — FACTORED (2026-07-12).** The shared guard now lives
+  once in `lib/session.ts` (`enforceOwnership`), registered per router via
+  `router.param('userId', …)`. The remaining per-router boilerplate
+  (`router.use(requireSession)` + `findMany({ where: { userId } })`) is still
+  repetitive but no longer security-sensitive; factor further only if it earns its keep.
 - **`extractor.ts:98` reads only `msg.content[0]`** — fine for Haiku today, brittle
   if a future model prepends a block. Scan for the first `type === 'text'` block.
 - **`extractor.ts` JSON parse** greedily regexes `\{[\s\S]*\}` then `JSON.parse`s —

@@ -2,10 +2,11 @@ import { Router } from 'express'
 import { prisma } from '../lib/prisma'
 import { CATEGORIES } from '../lib/categories'
 import { asyncHandler } from '../lib/asyncHandler'
-import { requireSession } from '../lib/session'
+import { requireSession, enforceOwnership } from '../lib/session'
 
 const router = Router()
 router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
 const VALID = new Set<string>([...CATEGORIES, 'overall'])
 
