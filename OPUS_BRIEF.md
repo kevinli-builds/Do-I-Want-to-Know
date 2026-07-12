@@ -311,3 +311,26 @@ layout) → "Save as PDF". The private, in-depth cousin of the share card.
 A1 + A4 together = "Subscription health" release; A2 + A5 = "Plan ahead"
 release; A3 + A7 + A8 = "Power reader" release. All backend-light; only
 A8 touches schema.
+
+---
+
+## 10. Code-quality audit (2026-07-12, Fable portfolio pass)
+
+_This repo is PUBLIC. Sensitive/exploitable security findings from this audit are
+**not** written here — they live in `C:\Users\snoww\PORTFOLIO_SECURITY_AUDIT.md`
+(home dir, not a git repo). **There is a top-priority OPEN security item for this
+app there — read it before any roadmap work.** Below are the non-sensitive
+code-quality notes only._
+
+- **Test coverage is still the biggest quality gap** (§3.1). The single highest-
+  value new suite is an **authorization matrix** over the `:userId` routes (a token
+  minted for user A must be rejected for user B's id). Write it against the fix for
+  the security item above; it also guards every future route.
+- **`:userId` router boilerplate.** The 8 data routers are near-identical
+  (`router.use(requireSession)` + `findMany({ where: { userId } })`). Factor the
+  shared auth+ownership wiring once (the security fix is the natural place).
+- **`extractor.ts:98` reads only `msg.content[0]`** — fine for Haiku today, brittle
+  if a future model prepends a block. Scan for the first `type === 'text'` block.
+- **`extractor.ts` JSON parse** greedily regexes `\{[\s\S]*\}` then `JSON.parse`s —
+  robust enough with the try/catch, but a canned-response test fixture (incl.
+  malformed JSON, already noted in §3.1) would lock the behavior in.
