@@ -7,6 +7,7 @@ import { logError } from '../lib/log'
 import { requireSession } from '../lib/session'
 import { getLedgerSummary } from '../lib/ledger'
 import { safeDate, optionalDate } from '../lib/dates'
+import { normalizeCategory } from '../lib/categories'
 
 const router = Router()
 router.use(requireSession)
@@ -96,7 +97,10 @@ router.post('/sync', asyncHandler(async (req, res) => {
         return {
           userId,
           emailId,
-          category: String(entry.category ?? 'other'),
+          // Validate against the known set — Claude's category comes from
+          // attacker-influenceable email content, so an unknown/injected value is
+          // coerced to 'other' rather than trusted into an aggregation bucket.
+          category: normalizeCategory(entry.category),
           vendor: String(entry.vendor ?? 'Unknown'),
           amount: Number.isFinite(amt) && amt >= 0 ? amt : null,
           currency: String(entry.currency ?? 'USD').slice(0, 8),

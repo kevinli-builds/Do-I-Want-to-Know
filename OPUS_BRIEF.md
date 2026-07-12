@@ -338,6 +338,11 @@ code-quality notes only._
   `router.param('userId', …)`. The remaining per-router boilerplate
   (`router.use(requireSession)` + `findMany({ where: { userId } })`) is still
   repetitive but no longer security-sensitive; factor further only if it earns its keep.
+- ✅ **Category validation on the extraction path — SHIPPED (2026-07-12).**
+  `lib/categories.ts` `normalizeCategory()` coerces any value outside `CATEGORIES` to
+  `other`; `emails.ts` persist path uses it instead of trusting Claude's raw string
+  (email content is attacker-influenceable). Matches how `budgets`/`transactions`
+  already validate. Test: `lib/__tests__/categories.test.ts`.
 - **`extractor.ts:98` reads only `msg.content[0]`** — fine for Haiku today, brittle
   if a future model prepends a block. Scan for the first `type === 'text'` block.
 - **`extractor.ts` JSON parse** greedily regexes `\{[\s\S]*\}` then `JSON.parse`s —
