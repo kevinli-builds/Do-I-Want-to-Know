@@ -131,6 +131,15 @@ export async function updateTransaction(
   if (!res.ok) throw new Error('Could not update transaction')
 }
 
+/** Remove a wrongly-extracted record. It will not reappear on the next sync. */
+export async function deleteTransaction(userId: string, id: string): Promise<void> {
+  if (demoMode) return
+  const res = await authedFetch(`${API}/transactions/${encodeURIComponent(userId)}/${encodeURIComponent(id)}`, {
+    method: 'DELETE',
+  })
+  if (!res.ok) throw new Error('Could not remove transaction')
+}
+
 /** Rename every record with vendor == `from` to `to`. Returns the count updated. */
 export async function renameVendorAll(userId: string, from: string, to: string): Promise<number> {
   if (demoMode) return 0

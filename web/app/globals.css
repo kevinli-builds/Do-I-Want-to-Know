@@ -503,6 +503,10 @@ body {
 }
 .txn:hover .vendor-edit-btn { opacity: 0.6; }
 .vendor-edit-btn:hover { opacity: 1; }
+/* Touch screens have no hover — keep the affordance visible */
+@media (hover: none) {
+  .vendor-edit-btn { opacity: 0.55; }
+}
 .vendor-input {
   font: inherit;
   font-weight: 700;
@@ -930,6 +934,15 @@ body {
   white-space: nowrap;
 }
 .txn-link:hover { text-decoration: underline; }
+.txn-remove-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--muted);
+  padding: 0 2px;
+}
+.txn-remove-btn:hover { color: #c0334a; }
 .txn-term {
   display: inline-block;
   font-size: 12px;

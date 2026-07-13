@@ -81,6 +81,19 @@ router.patch('/:userId/:id', asyncHandler(async (req, res) => {
   res.json({ ok: true, id, ...data })
 }))
 
+// DELETE /transactions/:userId/:id
+// Remove a wrongly-extracted record from the ledger. The source email stays
+// marked as examined, so the record will not reappear on the next sync —
+// which is exactly what "this extraction was wrong, don't count it" means.
+router.delete('/:userId/:id', asyncHandler(async (req, res) => {
+  const { userId, id } = req.params
+  const result = await prisma.ledgerEntry.deleteMany({
+    where: { id, userId },                 // ownership-scoped: can't touch another user's row
+  })
+  if (result.count === 0) return void res.status(404).json({ error: 'Transaction not found' })
+  res.json({ ok: true, id })
+}))
+
 // POST /transactions/:userId/rename-vendor   { from, to }
 // Rename every record with vendor == `from` to `to` (this user only). Powers the
 // "rename all" option so a messy sender name can be fixed across the board.

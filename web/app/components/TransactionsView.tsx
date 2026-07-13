@@ -1,7 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, renameVendorAll, type Transaction } from '../lib/api'
+import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, updateTransaction, deleteTransaction, renameVendorAll, type Transaction } from '../lib/api'
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 import { fmtDate } from '../lib/dates'
@@ -94,6 +94,16 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
       list => list.map(t => (t.id === id ? { ...t, vendor: v } : t)),
       () => updateTransaction(userId, id, { vendor: v }),
       () => { if (old && others > 0) setBulkPrompt({ from: old, to: v, count: others }) },
+    )
+  }
+
+  // Remove a wrongly-extracted record. Confirm first — this is the one
+  // destructive action in the list, and it won't reappear on the next sync.
+  function removeTxn(t: Transaction) {
+    if (!window.confirm(`Remove the ${t.vendor} record? It won't come back on the next sync.`)) return
+    return optimisticEdit(
+      list => list.filter(x => x.id !== t.id),
+      () => deleteTransaction(userId, t.id),
     )
   }
 
@@ -279,6 +289,9 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
                       >
                         View email ↗
                       </a>
+                      <button className="txn-remove-btn" onClick={() => removeTxn(t)} title="Remove this record">
+                        Remove
+                      </button>
                     </span>
                   </div>
                 </div>
