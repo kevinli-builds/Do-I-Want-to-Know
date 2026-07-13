@@ -33,6 +33,11 @@ retention section updated. ⚠️ **PRIVACY_POLICY.md is otherwise STALE — it 
 poll app ("questions and answers"). Full rewrite needed BEFORE the CASA submission** (the served `/privacy`
 page in `backend/lib/pages.ts` should be checked against it too). Remaining CASA blocker: the custom domain
 (user task).
+**Usability pass (2026-07-12)** — Audit rows now have a per-record **Remove** button
+(`DELETE /transactions/:userId/:id`, ownership-scoped, tested) so a bogus extraction can be
+deleted; the ✏️ vendor-rename button was hover-revealed (`opacity: 0`) and therefore invisible
+on touch screens — now visible under `@media (hover: none)`. Both live after the next
+Render + Vercel deploys.
 **Needs the user** — buy a custom domain (CASA blocker); set the Anthropic spend cap.
 **Parked** — new-growth features (breadth is not the bottleneck; depth is, per §9).
 
