@@ -22,9 +22,11 @@ tolerant, promo-month outliers absorbed, `confirmed` labelling), price-driven mo
 ago, zombie-sub finder. Wired into `computeMonitor` (replaces the noisy last-two-amounts price check;
 `subscriptions.health` in the payload) and the flag strip — **user-visible today via Monitor flags with no
 web changes**. First backend tests landed with it (vitest, `src/lib/__tests__/`; `npm test`).
-**Next → (highest value first)** — a dedicated "Subscription health" panel in MonitorView rendering
-`subscriptions.health` (steps list w/ confirmed badge, burn-delta headline, zombie cards with Unsubscribe
-deep-links) + mirror `health` in the demo-mode monitor port; §9 A2 cashflow calendar + A5 what-if ("Plan
+**Subscription-health panel SHIPPED (2026-07-13)** — MonitorView renders `subscriptions.health`:
+burn-delta headline, price-step list (confirmed / seen-N× badges, pct, date), zombie cards with
+Unsubscribe deep-links (`ZombieSub.unsubscribe` added backend-side, tested); demo-mode monitor
+port mirrors `health`. Verified visually in demo mode.
+**Next → (highest value first)** — §9 A2 cashflow calendar + A5 what-if ("Plan
 ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); §3 remaining backend tests
 (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
