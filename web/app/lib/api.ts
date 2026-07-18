@@ -27,6 +27,10 @@ export type * from './types'
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000'
 
+// The backend serves the canonical privacy policy (Google verification requires
+// it linked visibly from the landing page).
+export const PRIVACY_POLICY_URL = `${API}/privacy`
+
 const TOKEN_KEY = 'diwtkn_token'
 
 // ── Demo mode ────────────────────────────────────────────────────────────────

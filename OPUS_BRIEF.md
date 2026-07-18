@@ -10,10 +10,11 @@ below is accordingly short. Verify current state before implementing._
 
 ## 0. Status ledger (2026-07-05) + how to pick up
 
-**🔴 SECURITY — C1 IDOR fixed in code 2026-07-12, NEEDS RENDER REDEPLOY to go live.**
-`enforceOwnership` param guard + authz regression suite landed on `main` (details in
-§10 and the private security audit file). The fix is inert until Render rebuilds — push
-is done, so just trigger/confirm the redeploy.
+**✅ SECURITY — C1 IDOR fix VERIFIED LIVE (2026-07-18).** Checked the Render dashboard
+deploy list: the running deploy is `d051f14` (deployed 2026-07-12 23:54 EDT), which
+contains the fix. ⚠️ Note: the 2026-07-18 manual deploy re-ran `d051f14`, NOT the
+latest commit — so `5744e12`+ (zombie unsubscribe links in the monitor payload, and
+anything after) awaits the next **"Deploy latest commit"** click on Render.
 
 **Shipped ✓** — demo mode, share card, guess-before-you-look (D1); first-visit tour (§5);
 OAuth/CASA verification pack (§7, `docs/OAUTH_VERIFICATION.md`); web-client type/ScopePicker refactor;
@@ -31,10 +32,13 @@ ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); 
 (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
-retention section updated. ⚠️ **PRIVACY_POLICY.md is otherwise STALE — it still describes the SurveyTok-era
-poll app ("questions and answers"). Full rewrite needed BEFORE the CASA submission** (the served `/privacy`
-page in `backend/lib/pages.ts` should be checked against it too). Remaining CASA blocker: the custom domain
-(user task).
+retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served
+`/privacy` page (`backend/src/lib/pages.ts`) now match and cover verification blocker 2 in full: exact
+scopes + why, Limited Use disclosure, Anthropic-as-processor with no-training statement, storage/encryption
+posture, subprocessor table, disconnect-vs-delete distinction, demo-mode note; contact switched from the
+unowned `diwtkn.com` to the `snowwarrior1+diwtk@gmail.com` alias (swap to the custom domain when bought).
+Content pinned by `src/lib/__tests__/pages.test.ts`. ConnectView also gained the footer privacy-policy
+link (blocker 4). Remaining CASA blocker: the custom domain (user task).
 **Usability pass (2026-07-12)** — Audit rows now have a per-record **Remove** button
 (`DELETE /transactions/:userId/:id`, ownership-scoped, tested) so a bogus extraction can be
 deleted; the ✏️ vendor-rename button was hover-revealed (`opacity: 0`) and therefore invisible

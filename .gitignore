@@ -11,3 +11,5 @@ dist/
 Token Encryption Key.*
 *.key
 secrets.*
+
+.vercel

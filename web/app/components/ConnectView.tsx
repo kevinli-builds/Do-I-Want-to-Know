@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { startConnect, requestAccess } from '../lib/api'
+import { startConnect, requestAccess, PRIVACY_POLICY_URL } from '../lib/api'
 
 export function ConnectView({
   userId,
@@ -111,6 +111,12 @@ export function ConnectView({
           </form>
         )}
       </div>
+
+      <p className="fineprint">
+        <a href={PRIVACY_POLICY_URL} target="_blank" rel="noopener noreferrer">
+          Privacy policy
+        </a>
+      </p>
     </div>
   )
 }
