@@ -1242,7 +1242,10 @@ body {
   .shell { padding: 16px 14px 110px; }
 
   /* Tabs: a single horizontally-scrollable row instead of wrapping to 2–3
-     lines (we now have 5 tabs). Momentum scroll, hidden scrollbar. */
+     lines (we now have 5 tabs). Momentum scroll, hidden scrollbar.
+     Scrolling shadows (background-attachment trick) signal the offscreen
+     tabs: a shadow appears only on the side that actually overflows, and the
+     local-attachment covers hide it once you reach that end. */
   .view-tabs {
     flex-wrap: nowrap;
     justify-content: flex-start;
@@ -1250,9 +1253,17 @@ body {
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
     padding: 12px 14px 0;
+    background:
+      linear-gradient(to right, var(--bg) 40%, rgba(247, 247, 255, 0)) left/48px 100% no-repeat,
+      linear-gradient(to left, var(--bg) 40%, rgba(247, 247, 255, 0)) right/48px 100% no-repeat,
+      radial-gradient(farthest-side at 0 50%, rgba(26, 26, 46, 0.16), transparent) left/16px 100% no-repeat,
+      radial-gradient(farthest-side at 100% 50%, rgba(26, 26, 46, 0.16), transparent) right/16px 100% no-repeat;
+    background-attachment: local, local, scroll, scroll;
   }
   .view-tabs::-webkit-scrollbar { display: none; }
-  .view-tab { flex: 0 0 auto; white-space: nowrap; padding: 8px 12px; font-size: 14px; }
+  /* ≥44px touch targets (§8: tabs measured 34px) */
+  .view-tab { flex: 0 0 auto; white-space: nowrap; padding: 12px; min-height: 44px; font-size: 14px; }
+  .view-tabs .tour-help { width: 40px; height: 40px; } /* beats the later base rule */
 
   /* Header: let the title + action buttons wrap rather than squash */
   .header { flex-wrap: wrap; gap: 10px; }

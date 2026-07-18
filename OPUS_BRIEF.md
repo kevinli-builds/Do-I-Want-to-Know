@@ -27,9 +27,15 @@ web changes**. First backend tests landed with it (vitest, `src/lib/__tests__/`;
 burn-delta headline, price-step list (confirmed / seen-N× badges, pct, date), zombie cards with
 Unsubscribe deep-links (`ZombieSub.unsubscribe` added backend-side, tested); demo-mode monitor
 port mirrors `health`. Verified visually in demo mode.
+**§8 mobile fixes SHIPPED (2026-07-18)** — tab bar now signals its offscreen tabs
+(CSS scrolling-shadows on `.view-tabs`: the shadow appears only on the side that
+actually overflows) and the active tab auto-scrolls into view on change (instant, not
+smooth — smooth scroll silently no-ops in throttled tabs); tabs are 44px touch targets
+and the ? tour button 40px on phones. Hero number was already 40px (fixed earlier).
+Verified on a production build at 375×812 (dev-server HMR is unreliable in this repo —
+Turbopack + the spaces in the folder name; use the `diwtk-web-prod` launch config).
 **Next → (highest value first)** — §9 A2 cashflow calendar + A5 what-if ("Plan
-ahead"); §8 mobile fixes (tab-bar overflow, 44px targets, bigger hero number); §3 remaining backend tests
-(extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+ahead"); §3 remaining backend tests (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served

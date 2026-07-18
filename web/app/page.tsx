@@ -25,6 +25,15 @@ export default function Home() {
   const [scope,        setScope]        = useState<WrappedScope>({ mode: 'total' })
   const [scopeLoading, setScopeLoading] = useState(false)
   const [view, setView] = useState<'wrapped' | 'monitor' | 'audit' | 'promotions' | 'unsubscribe'>('wrapped')
+  // On phones the tab bar scrolls horizontally — keep the active tab visible.
+  // Instant (not smooth): smooth scroll animations are rAF-driven and silently
+  // no-op in throttled/background tabs, leaving the tab offscreen.
+  const tabsRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    tabsRef.current
+      ?.querySelector('.view-tab.active')
+      ?.scrollIntoView({ inline: 'center', block: 'nearest' })
+  }, [view])
   const [demo, setDemo] = useState(false)
   // Global sync state (the floating button works on every tab)
   const [syncing, setSyncing] = useState(false)
@@ -283,7 +292,7 @@ export default function Home() {
       <>
         {demo && <DemoBanner userId={getUserId()} onExit={handleExitDemo} />}
         {showTour && <IntroTour demo={demo} onClose={closeTour} />}
-        <nav className="view-tabs no-print">
+        <nav className="view-tabs no-print" ref={tabsRef}>
           <button
             className={`view-tab${view === 'wrapped' ? ' active' : ''}`}
             onClick={() => setView('wrapped')}
