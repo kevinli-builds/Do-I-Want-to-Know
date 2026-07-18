@@ -111,6 +111,19 @@ describe('computeSubHealth', () => {
     expect(h.zombies[0].lastOtherActivity).toBe(monthsAgo(5).toISOString().slice(0, 10))
   })
 
+  it('carries the vendor\'s latest unsubscribe link onto its zombie card', () => {
+    const entries = [
+      ...[6, 5, 4, 3, 2, 1].map(n =>
+        entry({ vendor: 'ZombieBox', category: 'subscription', date: monthsAgo(n), amount: 12 }),
+      ),
+      entry({ vendor: 'ZombieBox', category: 'subscription', date: monthsAgo(5), amount: 12, unsubscribe: 'https://old.example/unsub' }),
+      entry({ vendor: 'ZombieBox', category: 'subscription', date: monthsAgo(1), amount: 12, unsubscribe: 'https://new.example/unsub' }),
+    ]
+    const h = computeSubHealth(entries, [insight({ vendor: 'ZombieBox', monthlyEstimate: 12 })], NOW)
+    expect(h.zombies).toHaveLength(1)
+    expect(h.zombies[0].unsubscribe).toBe('https://new.example/unsub') // latest wins
+  })
+
   it('does not flag a sub whose vendor mails you (orders, marketing)', () => {
     const entries = [
       ...[4, 3, 2, 1].map(n => entry({ vendor: 'Amazon', category: 'subscription', date: monthsAgo(n), amount: 14.99 })),

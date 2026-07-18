@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { getMonitor, setBudget, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange } from '../lib/api'
+import { getMonitor, setBudget, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange, type SubHealth } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
 import { fmtDate, relativeDay } from '../lib/dates'
 import { catLabel, CATEGORY_KEYS } from '../lib/categories'
@@ -54,6 +54,78 @@ function Kpi({ label, pair, kind }: { label: string; pair: KpiPair; kind: 'money
         <Delta pair={pair} />
         <span className="kpi-prev">was {fmt(pair.prev)}</span>
       </div>
+    </div>
+  )
+}
+
+// Dedicated "Subscription health" panel: burn-delta headline, price-step
+// history (confirmed vs early), zombie subs with Unsubscribe deep-links.
+// Renders nothing until there's at least one thing worth saying.
+function SubHealthPanel({ health }: { health: SubHealth }) {
+  const delta = health.monthlyDeltaVsYearAgo
+  const hasContent = (delta != null && Math.abs(delta) >= 0.5) || health.steps.length > 0 || health.zombies.length > 0
+  if (!hasContent) return null
+  return (
+    <div className="card">
+      <h2>🩺 Subscription Health</h2>
+
+      {delta != null && Math.abs(delta) >= 0.5 && (
+        <p className={`health-headline ${delta > 0 ? 'up' : 'down'}`}>
+          Price changes alone moved your monthly subscription burn{' '}
+          <strong>{delta > 0 ? '+' : '−'}{moneyFull(Math.abs(delta))}/mo</strong> vs a year ago
+          {delta > 0 ? ' — same subscriptions, higher bills.' : ' — your subscriptions got cheaper.'}
+        </p>
+      )}
+
+      {health.steps.length > 0 && (
+        <>
+          <div className="sub-section-label">Price changes</div>
+          {health.steps.slice(0, 6).map((s, i) => (
+            <div className="row" key={`${s.vendor}-${s.atDate}-${i}`}>
+              <span className="label">
+                {s.pct > 0 ? '📈' : '📉'} {s.vendor}
+                <span className={`health-badge ${s.confirmed ? 'confirmed' : 'early'}`}>
+                  {s.confirmed ? 'confirmed' : `seen ${s.chargesAfter}×`}
+                </span>
+              </span>
+              <span className="value">
+                {moneyFull(s.from)} → {moneyFull(s.to)}
+                <span className={`delta ${s.pct > 0 ? 'delta-up' : 'delta-down'}`} style={{ marginLeft: 8 }}>
+                  {s.pct > 0 ? '▲' : '▼'} {Math.abs(s.pct)}%
+                </span>
+                <span className="health-when">{fmtDate(s.atDate)}</span>
+              </span>
+            </div>
+          ))}
+        </>
+      )}
+
+      {health.zombies.length > 0 && (
+        <>
+          <div className="sub-section-label">Possible zombies — paying, but hearing nothing</div>
+          {health.zombies.map(z => (
+            <div className="zombie-card" key={z.vendor}>
+              <div className="zombie-head">
+                <span className="zombie-vendor">🧟 {z.vendor}</span>
+                <span className="zombie-cost">{moneyFull(z.monthlyEstimate)}/mo</span>
+              </div>
+              <div className="zombie-meta">
+                Still billing you, but no other email from them in <strong>{z.daysQuiet} days</strong>
+                {z.lastOtherActivity ? ` (last: ${fmtDate(z.lastOtherActivity)})` : ' — bills only, ever'}.
+                {' '}Still using it?
+              </div>
+              {z.unsubscribe && (
+                <a className="txn-link" href={safeHref(z.unsubscribe)} target="_blank" rel="noopener noreferrer">
+                  Unsubscribe from their emails ↗
+                </a>
+              )}
+            </div>
+          ))}
+          <p className="chart-caption" style={{ textAlign: 'left', margin: '8px 0 0' }}>
+            “Quiet” means their emails — we can’t see whether you open the app itself.
+          </p>
+        </>
+      )}
     </div>
   )
 }
@@ -318,6 +390,9 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
           <p className="chart-caption">No new subscriptions, price changes, or upcoming renewals detected.</p>
         )}
       </div>
+
+      {/* Subscription health — price-step history, burn delta, zombie subs */}
+      {subs.health && <SubHealthPanel health={subs.health} />}
 
       {/* Inbox-load monitor */}
       {data.topSenders && data.topSenders.length > 0 && (

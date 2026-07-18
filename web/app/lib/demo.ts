@@ -27,6 +27,8 @@ import type {
   UpcomingItem,
   Renewal,
   Promotion,
+  PriceStep,
+  SubHealth,
 } from './types'
 
 export const DEMO_USER_ID = 'demo'
@@ -499,6 +501,55 @@ export function demoMonitor(period: 'month' | 'year'): MonitorData {
 
   const renewals = predictRenewals(radar.insights, 45)
 
+  // Subscription health, mirroring the backend's subhealth payload: steps from
+  // the same per-vendor price walk (with dates + confirmation), zombies = active
+  // subs whose vendor never sends anything but bills. Deterministic, like all
+  // demo data.
+  const healthSteps: PriceStep[] = []
+  for (const [vendor, list] of Object.entries(byVendor)) {
+    const seq = list.filter(e => usd(e) > 0).sort((a, b) => dt(a).getTime() - dt(b).getTime())
+    for (let i = 1; i < seq.length; i++) {
+      const from = usd(seq[i - 1])
+      const to = usd(seq[i])
+      if (Math.abs(to - from) > 0.5) {
+        const after = seq.length - i
+        healthSteps.push({
+          vendor,
+          from: round2(from),
+          to: round2(to),
+          pct: Math.round(((to - from) / from) * 1000) / 10,
+          atDate: seq[i].date.slice(0, 10),
+          chargesBefore: i,
+          chargesAfter: after,
+          confirmed: i >= 2 && after >= 2,
+        })
+      }
+    }
+  }
+  healthSteps.sort((a, b) => (a.atDate < b.atDate ? 1 : -1))
+  const nonBillVendors = new Set(all.filter(e => e.category !== 'subscription').map(e => e.vendor))
+  const zombies = radar.insights
+    .filter(i => i.active && !nonBillVendors.has(i.vendor))
+    .slice(0, 2)
+    .map(i => {
+      const first = subEntries.filter(e => e.vendor === i.vendor).sort((a, b) => dt(a).getTime() - dt(b).getTime())[0]
+      const daysQuiet = first ? Math.floor((NOW.getTime() - dt(first).getTime()) / 86_400_000) : 120
+      return {
+        vendor: i.vendor,
+        monthlyEstimate: i.monthlyEstimate,
+        lastCharge: i.lastCharge,
+        lastOtherActivity: null,
+        daysQuiet,
+        unsubscribe: null,
+      }
+    })
+  const confirmedDelta = round2(healthSteps.filter(s => s.confirmed).reduce((s, x) => s + (x.to - x.from), 0))
+  const health: SubHealth = {
+    steps: healthSteps.slice(0, 6),
+    monthlyDeltaVsYearAgo: healthSteps.length > 0 ? confirmedDelta : null,
+    zombies,
+  }
+
   // Top marketing senders, current vs previous window.
   const senderCur: Record<string, number> = {}
   const senderPrev: Record<string, number> = {}
@@ -545,7 +596,7 @@ export function demoMonitor(period: 'month' | 'year'): MonitorData {
     previousLabel: period === 'month' ? monthName(prevKey) : String(curYear - 1),
     kpis,
     analytics: { months, categories: cats, countByCategory, spendByCategory },
-    subscriptions: { monthlyBurn: radar.monthlyCost, activeCount: radar.insights.filter(i => i.active).length, newlyDetected, priceChanges, renewals },
+    subscriptions: { monthlyBurn: radar.monthlyCost, activeCount: radar.insights.filter(i => i.active).length, newlyDetected, priceChanges, renewals, health },
     topSenders,
     budgets,
     flags,

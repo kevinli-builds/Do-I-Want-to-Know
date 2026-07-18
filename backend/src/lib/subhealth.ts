@@ -52,6 +52,7 @@ export interface ZombieSub {
   lastCharge: string // ISO
   lastOtherActivity: string | null // ISO date of the vendor's last non-bill email
   daysQuiet: number // days with nothing from the vendor but bills
+  unsubscribe: string | null // vendor's most recent List-Unsubscribe link, if any
 }
 
 export interface SubHealth {
@@ -149,12 +150,17 @@ export function computeSubHealth(
 ): SubHealth {
   const subCharges: Record<string, Charge[]> = {}
   const otherActivity: Record<string, Date> = {} // latest non-bill email per vendor
+  const unsubLinks: Record<string, { date: Date; url: string }> = {} // latest unsubscribe link per vendor
   for (const e of entries) {
     if (e.category === 'subscription') {
       if (e.amount != null && e.amount > 0) (subCharges[e.vendor] ??= []).push({ date: e.date, amount: e.amount })
     } else {
       const d = otherActivity[e.vendor]
       if (!d || e.date > d) otherActivity[e.vendor] = e.date
+    }
+    if (e.unsubscribe) {
+      const u = unsubLinks[e.vendor]
+      if (!u || e.date > u.date) unsubLinks[e.vendor] = { date: e.date, url: e.unsubscribe }
     }
   }
 
@@ -206,6 +212,7 @@ export function computeSubHealth(
         lastCharge: s.lastCharge,
         lastOtherActivity: other ? iso(other) : null,
         daysQuiet,
+        unsubscribe: unsubLinks[s.vendor]?.url ?? null,
       })
     }
   }

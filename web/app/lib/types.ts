@@ -125,11 +125,39 @@ export interface MonitorData {
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
     priceChanges: { vendor: string; from: number; to: number }[]
     renewals?: Renewal[]
+    health?: SubHealth
   }
   topSenders?: { vendor: string; count: number; prevCount: number }[]
   budgets?: BudgetProgress[]
   flags?: MonitorFlag[]
   trend?: { mom: TrendChange | null; yoy: TrendChange | null }
+}
+
+// ── Subscription health (backend lib/subhealth.ts) ──────────────────────────
+export interface PriceStep {
+  vendor: string
+  from: number // stable price before the step (USD)
+  to: number // stable price after
+  pct: number // signed % change (negative = drop)
+  atDate: string // ISO date of the first charge at the new price
+  chargesBefore: number
+  chargesAfter: number
+  confirmed: boolean // both plateaus have ≥2 charges — not a fluke
+}
+
+export interface ZombieSub {
+  vendor: string
+  monthlyEstimate: number
+  lastCharge: string // ISO
+  lastOtherActivity: string | null
+  daysQuiet: number // days with nothing from the vendor but bills
+  unsubscribe: string | null
+}
+
+export interface SubHealth {
+  steps: PriceStep[]
+  monthlyDeltaVsYearAgo: number | null // price-driven burn change vs a year ago
+  zombies: ZombieSub[]
 }
 
 export interface BudgetProgress {

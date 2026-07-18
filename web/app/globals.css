@@ -699,6 +699,41 @@ body {
   font-size: 16px; line-height: 1; margin-left: 8px; padding: 0 2px;
 }
 .budget-remove:hover { color: #c0334a; }
+
+/* ── Subscription health panel ─────────────────────────────── */
+.health-headline {
+  font-size: 14.5px;
+  line-height: 1.5;
+  margin: 0 0 12px;
+  padding: 10px 14px;
+  border-radius: 10px;
+}
+.health-headline.up { background: #fdf1f3; color: #9c2b40; }
+.health-headline.down { background: #eefaf2; color: #1e7a4d; }
+.health-badge {
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  margin-left: 8px;
+  vertical-align: 1px;
+}
+.health-badge.confirmed { background: #e6f2f0; color: #1e7a4d; }
+.health-badge.early { background: #fdf6e7; color: #92600a; }
+.health-when { color: var(--muted); font-size: 12px; margin-left: 8px; }
+.zombie-card {
+  background: #faf9ff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-top: 10px;
+}
+.zombie-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.zombie-vendor { font-weight: 700; }
+.zombie-cost { font-weight: 700; color: #9c2b40; white-space: nowrap; }
+.zombie-meta { font-size: 13px; color: var(--muted); line-height: 1.5; margin: 4px 0 6px; }
 .budget-bar { height: 8px; border-radius: 999px; background: #ececf5; overflow: hidden; }
 .budget-fill { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
 .budget-fill.ok   { background: var(--purple); }
