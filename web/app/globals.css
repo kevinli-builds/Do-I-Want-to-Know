@@ -815,6 +815,68 @@ body {
   border-bottom-color: var(--purple);
 }
 
+/* ── Cashflow calendar (Monitor) ─────────────────────────────── */
+.cal-headline { font-size: 14px; color: #3a3a4e; margin-bottom: 12px; }
+.cal-nav { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.cal-nav-btn {
+  border: 1px solid var(--border);
+  background: #fff;
+  border-radius: 8px;
+  width: 30px;
+  height: 30px;
+  font-size: 16px;
+  cursor: pointer;
+  color: #444;
+}
+.cal-label { font-weight: 700; font-size: 14px; min-width: 110px; text-align: center; }
+.cal-today-btn { font-size: 12px; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; margin-bottom: 4px; }
+.cal-weekdays { margin-bottom: 2px; }
+.cal-wd { text-align: center; font-size: 11px; color: var(--muted); font-weight: 700; }
+.cal-day {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  min-height: 44px;
+  padding: 3px 2px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  cursor: pointer;
+  font: inherit;
+}
+.cal-out { border-color: transparent; background: none; cursor: default; }
+.cal-num { font-size: 11px; color: #666; line-height: 1.2; }
+.cal-amt { font-size: 10px; font-weight: 700; color: #3a3a4e; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.cal-renew { font-size: 10px; line-height: 1.1; }
+.cal-heat-1 { background: #efeefe; }
+.cal-heat-2 { background: #ddd9fd; }
+.cal-heat-3 { background: #c3bbfb; }
+.cal-heat-4 { background: #a89cf8; }
+.cal-heat-3 .cal-num, .cal-heat-4 .cal-num { color: #2a2440; }
+.cal-refund { background: #e7f7ee; }
+.cal-refund .cal-amt { color: #1a7f4b; }
+.cal-today { outline: 2px solid var(--purple); outline-offset: -1px; }
+.cal-selected { border-color: var(--purple); box-shadow: 0 0 0 2px rgba(108, 99, 255, 0.25); }
+.cal-legend {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 6px;
+}
+.cal-chip { width: 14px; height: 14px; border-radius: 4px; display: inline-block; }
+.cal-detail { border-top: 1px solid var(--border); margin-top: 10px; padding-top: 8px; }
+.cal-detail-head { font-weight: 700; font-size: 13px; display: flex; justify-content: space-between; gap: 10px; margin-bottom: 6px; }
+.cal-detail-total { color: #3a3a4e; font-variant-numeric: tabular-nums; }
+@media (max-width: 640px) {
+  .cal-amt { display: none; } /* too small to read — the tap detail carries it */
+  .cal-day { min-height: 40px; }
+}
+
 /* ── Monitor: segmented control + actions ───────────────────── */
 .monitor-actions {
   display: flex;

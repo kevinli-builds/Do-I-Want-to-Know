@@ -34,8 +34,18 @@ smooth — smooth scroll silently no-ops in throttled tabs); tabs are 44px touch
 and the ? tour button 40px on phones. Hero number was already 40px (fixed earlier).
 Verified on a production build at 375×812 (dev-server HMR is unreliable in this repo —
 Turbopack + the spaces in the folder name; use the `diwtk-web-prod` launch config).
-**Next → (highest value first)** — §9 A2 cashflow calendar + A5 what-if ("Plan
-ahead"); §3 remaining backend tests (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§9 A2 cashflow calendar SHIPPED (2026-07-18)** — Monitor card between Budgets and
+Analytics: Sunday-first month grid, past days heat-mapped by net daily spend (SPEND
+categories − refunds; net-refund days tinted green, excluded from the heat scale),
+future days carry predicted renewals (🔁 with count), "≈ $X hits in the next 7 days"
+headline, month nav + tap-a-day detail. Pure `lib/cashflow.ts` (12 vitest tests —
+vitest now wired in `web/`, `npm test`); verified in demo mode desktop + 375px.
+**Date-parsing bug FIXED with it**: bare `YYYY-MM-DD` renewal dates were parsed as UTC
+midnight by `lib/dates.ts`, so every renewal displayed a day early in US timezones
+(UpcomingFloater + Monitor "renewing soon" affected too) — `toDate` now parses bare
+dates as local calendar dates (regression-tested).
+**Next → (highest value first)** — §9 A5 what-if simulator (completes "Plan ahead");
+§3 remaining backend tests (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served

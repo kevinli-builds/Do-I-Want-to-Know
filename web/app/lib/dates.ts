@@ -1,6 +1,13 @@
 // Shared date formatting + relative-time helpers (single source of truth).
 
 function toDate(v: string | number | Date): Date {
+  // A bare YYYY-MM-DD (e.g. a predicted renewal date) is a CALENDAR date, but
+  // new Date() parses it as UTC midnight — which is the previous local day in
+  // the Americas, showing renewals a day early. Parse it as local instead.
+  if (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v)) {
+    const [y, m, d] = v.split('-').map(Number)
+    return new Date(y, m - 1, d)
+  }
   return v instanceof Date ? v : new Date(v)
 }
 
