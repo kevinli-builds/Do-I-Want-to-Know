@@ -20,6 +20,19 @@ export interface ExtractedEntry {
 
 type BatchResult = Record<string, ExtractedEntry | null>
 
+// Parse one batch response's content blocks into the index→entry map.
+// Exported for tests. Scans for the FIRST text block rather than assuming
+// content[0] (a future model may prepend thinking/tool blocks). Throws on
+// malformed JSON so the caller skips the batch and the next sync retries it;
+// a response with no JSON object at all yields {} (all-not-relevant), matching
+// the model's instructed "null for non-relevant" contract.
+export function parseBatchResponse(content: { type: string; text?: string }[]): BatchResult {
+  const first = content.find(b => b.type === 'text' && typeof b.text === 'string')
+  const text = first?.text ?? '{}'
+  const jsonMatch = text.match(/\{[\s\S]*\}/)
+  return JSON.parse(jsonMatch?.[0] ?? '{}') as BatchResult
+}
+
 export async function extractEntries(
   emails: { id: string; subject: string; from: string; date: string; snippet: string }[]
 ): Promise<Map<string, ExtractedEntry | null>> {
@@ -95,9 +108,12 @@ termMonths rule:
       messages: [{ role: 'user', content: prompt }],
       })
 
-      const text = msg.content[0].type === 'text' ? msg.content[0].text : '{}'
-      const jsonMatch = text.match(/\{[\s\S]*\}/)
-      const parsed: BatchResult = JSON.parse(jsonMatch?.[0] ?? '{}')
+      // A max_tokens-truncated response can still regex-extract as valid JSON
+      // (or as no JSON at all, which parses to {}) — either way entries would
+      // be silently marked not-relevant and lost. Treat truncation as a batch
+      // failure so the next sync retries it.
+      if (msg.stop_reason === 'max_tokens') throw new Error('response truncated (max_tokens)')
+      const parsed = parseBatchResponse(msg.content)
       batch.forEach((e, idx) => results.set(e.id, parsed[String(idx)] ?? null))
     } catch (err) {
       // API error (rate limit after retries) or unparseable JSON: leave this

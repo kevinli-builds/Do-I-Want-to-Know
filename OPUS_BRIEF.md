@@ -53,8 +53,15 @@ analytics, subscription category excluded to avoid double-counting) → live
 with the drop-on-cancel. Pure `lib/whatif.ts` (8 tests). `items` is optional in the
 web type so the card degrades gracefully until the Render deploy. Verified in demo
 mode desktop + 375px (44px-ish touch rows via mobile padding bump).
-**Next → (highest value first)** — §3 remaining backend tests (extractor parsing, fx,
-renewals); §9 A3 vendor drilldown pages or A7 ledger workbench ("Power reader"). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§3 backend tests SHIPPED (2026-07-18)** — extractor parse path (extracted as pure
+`parseBatchResponse`, now scans for the FIRST text block per §10 instead of
+`content[0]`), fx conversion/normalization, renewals prediction: 20 new tests, 57
+total. **Hardening found by the tests:** a max_tokens-truncated Claude response could
+regex-parse cleanly (or to `{}`) and silently mark a whole batch not-relevant —
+permanent email loss; `extractEntries` now throws on `stop_reason === 'max_tokens'`
+so truncated batches retry next sync.
+**Next → (highest value first)** — §9 A3 vendor drilldown pages or A7 ledger
+workbench ("Power reader"). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served
