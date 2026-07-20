@@ -596,7 +596,18 @@ export function demoMonitor(period: 'month' | 'year'): MonitorData {
     previousLabel: period === 'month' ? monthName(prevKey) : String(curYear - 1),
     kpis,
     analytics: { months, categories: cats, countByCategory, spendByCategory },
-    subscriptions: { monthlyBurn: radar.monthlyCost, activeCount: radar.insights.filter(i => i.active).length, newlyDetected, priceChanges, renewals, health },
+    subscriptions: {
+      monthlyBurn: radar.monthlyCost,
+      activeCount: radar.insights.filter(i => i.active).length,
+      items: radar.insights
+        .filter(i => i.active)
+        .map(i => ({ vendor: i.vendor, monthlyEstimate: i.monthlyEstimate, cadence: i.cadence }))
+        .sort((a, b) => b.monthlyEstimate - a.monthlyEstimate),
+      newlyDetected,
+      priceChanges,
+      renewals,
+      health,
+    },
     topSenders,
     budgets,
     flags,

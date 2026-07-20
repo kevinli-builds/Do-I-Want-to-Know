@@ -63,6 +63,8 @@ export interface MonitorData {
   subscriptions: {
     monthlyBurn: number
     activeCount: number
+    // Per-active-sub burn, for the what-if simulator (sums to monthlyBurn).
+    items: { vendor: string; monthlyEstimate: number; cadence: 'weekly' | 'monthly' | 'annual' }[]
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
     priceChanges: { vendor: string; from: number; to: number }[] // kept for UI compat; sourced from health.steps
     renewals: Renewal[]
@@ -415,6 +417,9 @@ export function computeMonitor(
     subscriptions: {
       monthlyBurn: stats.monthlySubscriptionCost,
       activeCount: activeInsights.length,
+      items: activeInsights
+        .map(s => ({ vendor: s.vendor, monthlyEstimate: s.monthlyEstimate, cadence: s.cadence }))
+        .sort((a, b) => b.monthlyEstimate - a.monthlyEstimate),
       newlyDetected,
       priceChanges,
       renewals,

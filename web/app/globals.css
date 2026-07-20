@@ -875,7 +875,64 @@ body {
 @media (max-width: 640px) {
   .cal-amt { display: none; } /* too small to read — the tap detail carries it */
   .cal-day { min-height: 40px; }
+
+  /* What-if rows: comfortable touch targets */
+  .wi-sub { padding: 12px 8px; }
+  .wi-cap { padding: 10px 8px; }
 }
+
+/* ── What-if simulator (Monitor) ─────────────────────────────── */
+.wi-fiveyear { font-size: 14px; color: #3a3a4e; margin-bottom: 12px; }
+.wi-subs { display: flex; flex-direction: column; gap: 2px; }
+.wi-sub {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 14px;
+}
+.wi-sub:hover { background: #f6f5ff; }
+.wi-sub input { accent-color: var(--purple); width: 16px; height: 16px; flex: none; }
+.wi-sub-vendor { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wi-sub-cost { color: var(--muted); font-variant-numeric: tabular-nums; }
+.wi-sub.canceled .wi-sub-vendor { text-decoration: line-through; color: var(--muted); }
+.wi-sub.canceled .wi-sub-cost { color: #1a7f4b; font-weight: 700; }
+.wi-cap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  font-size: 14px;
+  flex-wrap: wrap;
+}
+.wi-cap-label { flex: 1; min-width: 90px; }
+.wi-cap-avg { color: var(--muted); font-size: 12px; }
+.wi-cap-input { display: inline-flex; align-items: center; gap: 3px; color: var(--muted); font-size: 13px; }
+.wi-cap-input input {
+  width: 72px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  font-size: 14px;
+}
+.wi-cap-save { color: #1a7f4b; font-weight: 700; font-size: 13px; font-variant-numeric: tabular-nums; }
+.wi-result {
+  border-top: 1px solid var(--border);
+  margin-top: 12px;
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: flex-start;
+}
+.wi-result.active { border-top-color: var(--purple); }
+.wi-result-big { font-size: 17px; }
+.wi-result-big strong { color: #1a7f4b; }
+.wi-result-sub { font-size: 13px; color: #3a3a4e; }
+.wi-result-hint { font-size: 13px; color: var(--muted); }
 
 /* ── Monitor: segmented control + actions ───────────────────── */
 .monitor-actions {

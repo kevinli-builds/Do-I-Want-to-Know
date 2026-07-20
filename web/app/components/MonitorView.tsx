@@ -8,6 +8,7 @@ import { catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { AnalyticsChart } from './AnalyticsChart'
 import { CashflowCalendar } from './CashflowCalendar'
+import { WhatIfCard } from './WhatIfCard'
 
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {
@@ -351,6 +352,9 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
 
       {/* Cashflow calendar — daily spend heatmap + predicted renewals ahead */}
       <CashflowCalendar userId={userId} renewals={subs.renewals ?? []} />
+
+      {/* What-if simulator — cancel subs / cap categories, watch $/yr move */}
+      <WhatIfCard subs={subs.items} analytics={data.analytics} />
 
       {/* Analytics — configurable line chart */}
       {data.analytics && <AnalyticsChart data={data.analytics} />}

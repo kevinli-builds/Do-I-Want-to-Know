@@ -104,6 +104,12 @@ export interface TrendChange {
   to: number
   deltaPct: number | null
 }
+export interface SubItem {
+  vendor: string
+  monthlyEstimate: number
+  cadence: 'weekly' | 'monthly' | 'annual'
+}
+
 export interface MonitorData {
   connected: boolean
   email: string | null
@@ -122,6 +128,9 @@ export interface MonitorData {
   subscriptions?: {
     monthlyBurn: number
     activeCount: number
+    // Per-active-sub burn for the what-if simulator (optional: older backend
+    // deploys don't send it — the UI degrades gracefully without it).
+    items?: SubItem[]
     newlyDetected: { vendor: string; monthlyEstimate: number }[]
     priceChanges: { vendor: string; from: number; to: number }[]
     renewals?: Renewal[]

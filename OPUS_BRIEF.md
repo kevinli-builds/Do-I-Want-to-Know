@@ -44,8 +44,17 @@ vitest now wired in `web/`, `npm test`); verified in demo mode desktop + 375px.
 midnight by `lib/dates.ts`, so every renewal displayed a day early in US timezones
 (UpcomingFloater + Monitor "renewing soon" affected too) — `toDate` now parses bare
 dates as local calendar dates (regression-tested).
-**Next → (highest value first)** — §9 A5 what-if simulator (completes "Plan ahead");
-§3 remaining backend tests (extractor parsing, fx, renewals). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§9 A5 what-if simulator SHIPPED (2026-07-18) — "Plan ahead" release complete (A2+A5).**
+Monitor "💡 What If?" card after the calendar: tick subscriptions to cancel (per-sub
+burn now in the monitor payload as `subscriptions.items`, backend + demo mirror; sums
+to monthlyBurn so numbers stay consistent) and/or cap a category (avg monthly from
+analytics, subscription category excluded to avoid double-counting) → live
+"$X/mo · $Y/yr" recompute + the §4 D5 hook: "subscriptions cost ≈ $N over 5 years"
+with the drop-on-cancel. Pure `lib/whatif.ts` (8 tests). `items` is optional in the
+web type so the card degrades gracefully until the Render deploy. Verified in demo
+mode desktop + 375px (44px-ish touch rows via mobile padding bump).
+**Next → (highest value first)** — §3 remaining backend tests (extractor parsing, fx,
+renewals); §9 A3 vendor drilldown pages or A7 ledger workbench ("Power reader"). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served
