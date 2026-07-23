@@ -75,10 +75,27 @@ desktop + 375px; the 📊 opener is 44×44 and always visible (never a hover rev
 Note: the `diwtk-web-prod` launch config (`:3011`, `npm run start -- -p 3011`) this brief
 kept referencing did not actually exist — recreated it, but `.claude/` is gitignored, so a
 fresh clone has to add it again.
-**Next → (highest value first)** — §9 A7 ledger workbench (filters row on the Audit
-tab: free text + amount/date range + category chips, saved views, CSV of the filtered
-set), then A8 anomaly feedback loop (the only §9 item that touches schema) to close
-the "Power reader" release. **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§9 A7 ledger workbench SHIPPED (2026-07-23).** The Audit tab grew a filters row
+rather than a new tab (IA is full, per §9): multi-term text search over vendor+
+description, category chips (canonical order, multi-select), USD amount range, date
+range, hide-accepted, five sorts (recent / oldest / highest / lowest / vendor A–Z),
+named **saved views** (localStorage per user — stores the filter+sort, not records,
+and normalizes anything corrupt on read), a live summary line ("Showing 148 of 379 ·
+14 vendors · $3,016.74 net") with Clear, and **CSV of exactly the filtered set**
+(the Wrapped ⬇ Export stays the full-ledger xlsx). Pure `lib/ledgerFilter.ts`
+(23 vitest tests, **55 total in `web/`**); `filterTxns`/`sortTxns` are generic over
+`T extends LedgerTxn` so the Audit rows keep their full `Transaction` type.
+**The CSV mirrors the backend export's `safeText` formula-injection guard** — a
+vendor/description beginning `= + - @` or tab/CR is apostrophe-prefixed, since that
+text is email-derived (tested). Verified in demo mode on a production build: filters
+compose (379 → 148 → 17 → 3), a saved view round-trips exactly, the CSV blob carries
+only the filtered rows, all 44px touch targets and no overflow at 375px.
+**Next → (highest value first)** — §9 A8 anomaly feedback loop closes the "Power
+reader" release; it is the only §9 item that touches schema (one small table:
+userId, vendor, toleranceMultiplier + a threshold-math change), so it needs a
+migration + a Render deploy, unlike A2/A3/A5/A7. After that §9 is down to A6
+(promise tracker, explicitly "prototype before promising precision") and A9
+(print-CSS annual report), or §6 W2 the weekly digest email for retention. **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served

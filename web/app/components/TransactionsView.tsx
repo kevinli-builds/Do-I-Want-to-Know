@@ -5,16 +5,55 @@ import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, update
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 import { fmtDate } from '../lib/dates'
+import {
+  EMPTY_FILTERS, SORT_LABELS, deleteView, filterTxns, isFiltered, loadViews, saveView,
+  sortTxns, summarize, toCsv, type LedgerFilters, type SavedView, type SortKey,
+} from '../lib/ledgerFilter'
 import { VendorButton } from './VendorPanel'
 
 export function TransactionsView({ userId, refreshKey = 0, onChanged, onOpenVendor }: { userId: string; refreshKey?: number; onChanged?: () => void; onOpenVendor?: (v: string) => void }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
   const [error, setError] = useState(false)
-  const [search, setSearch] = useState('')
-  const [category, setCategory] = useState('all')
-  const [sort, setSort] = useState<'recent' | 'amount'>('recent')
-  const [hideAccepted, setHideAccepted] = useState(false)
   const [accepted, setAccepted] = useState<Set<string>>(new Set())
+
+  // ── Ledger workbench (§9 A7): filters, sort, saved views ──────────────────
+  const [filters, setFilters] = useState<LedgerFilters>(EMPTY_FILTERS)
+  const [sort, setSort] = useState<SortKey>('recent')
+  const [showFilters, setShowFilters] = useState(false)
+  const [views, setViews] = useState<SavedView[]>([])
+  const [viewName, setViewName] = useState('')
+
+  useEffect(() => { setViews(loadViews(userId)) }, [userId])
+
+  const patch = (p: Partial<LedgerFilters>) => setFilters(f => ({ ...f, ...p }))
+
+  function toggleCategory(cat: string) {
+    setFilters(f => ({
+      ...f,
+      categories: f.categories.includes(cat) ? f.categories.filter(c => c !== cat) : [...f.categories, cat],
+    }))
+  }
+
+  // Blank input → no bound (not 0), so clearing a box widens the result again.
+  function amountBound(raw: string): number | null {
+    const n = Number(raw)
+    return raw.trim() === '' || !Number.isFinite(n) ? null : n
+  }
+
+  function applyView(v: SavedView) {
+    setFilters(v.filters)
+    setSort(v.sort)
+    setShowFilters(true)
+  }
+  function storeView() {
+    const name = viewName.trim()
+    if (!name) return
+    setViews(saveView(userId, { name, filters, sort }))
+    setViewName('')
+  }
+  function dropView(name: string) {
+    setViews(deleteView(userId, name))
+  }
 
   const load = useCallback(async () => {
     setError(false)
@@ -118,28 +157,33 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged, onOpenVend
     )
   }
 
-  const categories = useMemo(
-    () => (all ? [...new Set(all.map(t => t.category))].sort() : []),
-    [all]
-  )
-
-  const rows = useMemo(() => {
+  // Categories actually present, in the app's canonical order (not alphabetical).
+  const categories = useMemo(() => {
     if (!all) return []
-    const q = search.trim().toLowerCase()
-    let list = all.filter(t => {
-      if (category !== 'all' && t.category !== category) return false
-      if (hideAccepted && accepted.has(t.vendor)) return false
-      if (!q) return true
-      return t.vendor.toLowerCase().includes(q) || t.description.toLowerCase().includes(q)
-    })
-    list = [...list].sort((a, b) =>
-      sort === 'amount'
-        // Sort by the USD-normalized amount so currencies are comparable.
-        ? (b.amountUsd ?? b.amount ?? -1) - (a.amountUsd ?? a.amount ?? -1)
-        : new Date(b.date).getTime() - new Date(a.date).getTime()
-    )
-    return list
-  }, [all, search, category, sort, hideAccepted, accepted])
+    const present = new Set(all.map(t => t.category))
+    return CATEGORY_KEYS.filter(c => present.has(c))
+  }, [all])
+
+  const rows = useMemo(
+    () => (all ? sortTxns(filterTxns(all, filters, accepted), sort) : []),
+    [all, filters, sort, accepted]
+  )
+  const summary = useMemo(() => summarize(rows), [rows])
+  const narrowed = isFiltered(filters)
+
+  // CSV of exactly what's on screen — the filtered, sorted set. The xlsx
+  // Export button on Wrapped stays the full-ledger download.
+  function downloadCsv() {
+    const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `diwtkn-ledger-${new Date().toISOString().slice(0, 10)}.csv`
+    document.body.appendChild(a)
+    a.click()
+    document.body.removeChild(a)
+    URL.revokeObjectURL(url)
+  }
 
   if (error) {
     return (
@@ -169,7 +213,7 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged, onOpenVend
       <div className="header">
         <div>
           <h1>Audit</h1>
-          <div className="email">{all.length} records · click any to open its source email</div>
+          <div className="email">Filter, sort, and export your ledger · every row links to its source email</div>
         </div>
       </div>
 
@@ -185,23 +229,127 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged, onOpenVend
             <input
               className="audit-search"
               placeholder="Search vendor or description…"
-              value={search}
-              onChange={e => setSearch(e.target.value)}
+              value={filters.text}
+              onChange={e => patch({ text: e.target.value })}
             />
-            <select className="audit-select" value={category} onChange={e => setCategory(e.target.value)}>
-              <option value="all">All categories</option>
-              {categories.map(c => (
-                <option key={c} value={c}>{catEmoji(c)} {c}</option>
+            <select className="audit-select" value={sort} onChange={e => setSort(e.target.value as SortKey)}>
+              {Object.entries(SORT_LABELS).map(([k, label]) => (
+                <option key={k} value={k}>{label}</option>
               ))}
             </select>
-            <select className="audit-select" value={sort} onChange={e => setSort(e.target.value as 'recent' | 'amount')}>
-              <option value="recent">Most recent</option>
-              <option value="amount">Highest amount</option>
-            </select>
-            <label className="unsub-toggle">
-              <input type="checkbox" checked={hideAccepted} onChange={e => setHideAccepted(e.target.checked)} />
-              Hide accepted
-            </label>
+            <button
+              className={`audit-filter-btn${showFilters ? ' on' : ''}`}
+              onClick={() => setShowFilters(s => !s)}
+              aria-expanded={showFilters}
+            >
+              ⚙ Filters{narrowed ? ' ·' : ''}
+              {narrowed && <span className="audit-filter-dot" aria-label="filters active" />}
+            </button>
+            <button className="audit-filter-btn" onClick={downloadCsv} disabled={rows.length === 0}>
+              ⬇ CSV
+            </button>
+          </div>
+
+          {showFilters && (
+            <div className="audit-filters">
+              <div className="af-group">
+                <div className="af-label">Categories</div>
+                <div className="af-chips">
+                  {categories.map(c => (
+                    <button
+                      key={c}
+                      className={`af-chip${filters.categories.includes(c) ? ' on' : ''}`}
+                      onClick={() => toggleCategory(c)}
+                      aria-pressed={filters.categories.includes(c)}
+                    >
+                      {catEmoji(c)} {catLabel(c)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="af-row">
+                <div className="af-group">
+                  <div className="af-label">Amount (USD)</div>
+                  <div className="af-pair">
+                    <input
+                      className="af-input" type="number" inputMode="decimal" min="0" placeholder="min"
+                      value={filters.minAmount ?? ''}
+                      onChange={e => patch({ minAmount: amountBound(e.target.value) })}
+                    />
+                    <span className="af-dash">–</span>
+                    <input
+                      className="af-input" type="number" inputMode="decimal" min="0" placeholder="max"
+                      value={filters.maxAmount ?? ''}
+                      onChange={e => patch({ maxAmount: amountBound(e.target.value) })}
+                    />
+                  </div>
+                </div>
+
+                <div className="af-group">
+                  <div className="af-label">Date range</div>
+                  <div className="af-pair">
+                    <input
+                      className="af-input af-date" type="date"
+                      value={filters.from ?? ''}
+                      onChange={e => patch({ from: e.target.value || null })}
+                    />
+                    <span className="af-dash">–</span>
+                    <input
+                      className="af-input af-date" type="date"
+                      value={filters.to ?? ''}
+                      onChange={e => patch({ to: e.target.value || null })}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <label className="unsub-toggle">
+                <input
+                  type="checkbox"
+                  checked={filters.hideAccepted}
+                  onChange={e => patch({ hideAccepted: e.target.checked })}
+                />
+                Hide accepted vendors
+              </label>
+
+              <div className="af-group">
+                <div className="af-label">Saved views</div>
+                {views.length > 0 && (
+                  <div className="af-chips">
+                    {views.map(v => (
+                      <span className="af-view" key={v.name}>
+                        <button className="af-view-apply" onClick={() => applyView(v)}>{v.name}</button>
+                        <button className="af-view-x" onClick={() => dropView(v.name)} aria-label={`Delete view ${v.name}`}>×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+                <div className="af-pair">
+                  <input
+                    className="af-input af-view-name"
+                    placeholder="Name this view…"
+                    value={viewName}
+                    onChange={e => setViewName(e.target.value)}
+                    onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); storeView() } }}
+                  />
+                  <button className="audit-filter-btn" onClick={storeView} disabled={!viewName.trim()}>Save</button>
+                </div>
+                <p className="af-hint">Saved on this device — a view stores the filters, not the records.</p>
+              </div>
+            </div>
+          )}
+
+          <div className="audit-summary">
+            <span>
+              {narrowed ? <>Showing <strong>{summary.count}</strong> of {all.length}</> : <><strong>{summary.count}</strong> records</>}
+              {' · '}{summary.vendors} vendor{summary.vendors === 1 ? '' : 's'}
+              {summary.spend > 0 && <> · {money(summary.net)} net</>}
+              {summary.refunds > 0 && <> ({money(summary.refunds)} refunded)</>}
+            </span>
+            {narrowed && (
+              <button className="link-btn" onClick={() => setFilters(EMPTY_FILTERS)}>Clear filters</button>
+            )}
           </div>
 
           {bulkPrompt && (
