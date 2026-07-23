@@ -1,18 +1,27 @@
 import { Router } from 'express'
 import { prisma } from '../lib/prisma'
+import { computeStats } from '../lib/stats'
+import { getUsdRates } from '../lib/fx'
+import { asyncHandler } from '../lib/asyncHandler'
+import { requireSession, enforceOwnership } from '../lib/session'
+import { findUserOr404 } from '../lib/ledger'
 
 const router = Router()
+router.use(requireSession)
+router.param('userId', enforceOwnership) // 403 unless :userId matches the token's user
 
-// GET /wrapped/:userId
-// Returns aggregated "Spotify Wrapped"-style stats from the user's ledger
-router.get('/:userId', async (req, res) => {
+// GET /wrapped/:userId               → all-time stats
+// GET /wrapped/:userId?year=2025      → scoped to a calendar year
+// GET /wrapped/:userId?from=&to=      → scoped to a custom date window (inclusive, ISO dates)
+//
+// `availableYears` / `availableMonths` are always computed from the FULL ledger
+// so the scope picker shows every option regardless of the current filter.
+// Pure DB read — no Claude.
+router.get('/:userId', asyncHandler(async (req, res) => {
   const { userId } = req.params
 
-  const user = await prisma.user.findUnique({
-    where: { id: userId },
-    include: { oauthToken: { select: { id: true } } },
-  })
-  if (!user) return void res.status(404).json({ error: 'User not found' })
+  const user = await findUserOr404(res, userId)
+  if (!user) return
 
   const entries = await prisma.ledgerEntry.findMany({
     where: { userId },
@@ -24,74 +33,54 @@ router.get('/:userId', async (req, res) => {
       connected: !!user.oauthToken,
       email: user.email,
       totalEntries: 0,
+      year: null,
+      from: null,
+      to: null,
+      availableYears: [],
+      availableMonths: [],
       stats: null,
     })
   }
 
-  // ── Total spend ──────────────────────────────────────────────────────────────
-  const totalSpend = entries
-    .filter(e => e.amount !== null)
-    .reduce((sum, e) => sum + (e.amount ?? 0), 0)
+  const availableYears = [...new Set(entries.map(e => e.date.getFullYear()))].sort((a, b) => b - a)
+  const availableMonths = [...new Set(entries.map(e =>
+    `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, '0')}`
+  ))].sort((a, b) => (a < b ? 1 : -1)) // newest first
 
-  // ── Category breakdown ────────────────────────────────────────────────────────
-  const byCategory: Record<string, { count: number; spend: number }> = {}
-  for (const e of entries) {
-    if (!byCategory[e.category]) byCategory[e.category] = { count: 0, spend: 0 }
-    byCategory[e.category].count++
-    byCategory[e.category].spend += e.amount ?? 0
+  // Scope: a custom window (from/to) takes precedence, then a calendar year,
+  // else all-time.
+  const fromDate = typeof req.query.from === 'string' ? new Date(req.query.from) : null
+  const toRaw = typeof req.query.to === 'string' ? new Date(req.query.to) : null
+  const hasWindow = fromDate && !isNaN(fromDate.getTime()) && toRaw && !isNaN(toRaw.getTime())
+
+  const yearParam = Number(req.query.year)
+  const year = Number.isInteger(yearParam) && availableYears.includes(yearParam) ? yearParam : null
+
+  let scoped = entries
+  let fromOut: Date | null = null
+  let toOut: Date | null = null
+  if (hasWindow) {
+    const toEnd = new Date(toRaw!)
+    toEnd.setHours(23, 59, 59, 999) // inclusive of the end day
+    scoped = entries.filter(e => e.date >= fromDate! && e.date <= toEnd)
+    fromOut = fromDate
+    toOut = toRaw
+  } else if (year !== null) {
+    scoped = entries.filter(e => e.date.getFullYear() === year)
   }
 
-  // ── Top vendors by order frequency ───────────────────────────────────────────
-  const vendorFreq: Record<string, number> = {}
-  for (const e of entries) {
-    vendorFreq[e.vendor] = (vendorFreq[e.vendor] ?? 0) + 1
-  }
-  const topVendors = Object.entries(vendorFreq)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, 5)
-    .map(([vendor, count]) => ({ vendor, count }))
-
-  // ── Most expensive single purchase ───────────────────────────────────────────
-  const withAmount = entries.filter(e => e.amount !== null && e.amount > 0)
-  const mostExpensive =
-    withAmount.length > 0
-      ? withAmount.reduce((max, e) => (e.amount! > max.amount! ? e : max))
-      : null
-
-  // ── Monthly spend (last 12 months) ───────────────────────────────────────────
-  const monthlySpend: Record<string, number> = {}
-  for (const e of entries) {
-    if (!e.amount) continue
-    const key = `${e.date.getFullYear()}-${String(e.date.getMonth() + 1).padStart(2, '0')}`
-    monthlySpend[key] = (monthlySpend[key] ?? 0) + e.amount
-  }
-
-  // ── Subscriptions ─────────────────────────────────────────────────────────────
-  const subscriptionVendors = [
-    ...new Set(entries.filter(e => e.category === 'subscription').map(e => e.vendor)),
-  ]
-
+  const rates = await getUsdRates()
   res.json({
     connected: true,
     email: user.email,
-    totalEntries: entries.length,
-    stats: {
-      totalSpend: Math.round(totalSpend * 100) / 100,
-      byCategory,
-      topVendors,
-      mostExpensive: mostExpensive
-        ? {
-            vendor: mostExpensive.vendor,
-            amount: mostExpensive.amount,
-            description: mostExpensive.description,
-            date: mostExpensive.date,
-          }
-        : null,
-      monthlySpend,
-      subscriptions: subscriptionVendors,
-      subscriptionCount: subscriptionVendors.length,
-    },
+    totalEntries: scoped.length,
+    year: hasWindow ? null : year,
+    from: fromOut,
+    to: toOut,
+    availableYears,
+    availableMonths,
+    stats: computeStats(scoped, rates),
   })
-})
+}))
 
 export { router as wrappedRouter }

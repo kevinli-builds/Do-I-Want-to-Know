@@ -8,11 +8,49 @@ datasource db {
 }
 
 model User {
-  id         String        @id          // device UUID
-  email      String?       @unique      // Gmail address, set after OAuth
-  createdAt  DateTime      @default(now())
-  oauthToken OAuthToken?
-  ledger     LedgerEntry[]
+  id           String        @id          // device UUID
+  email        String?       @unique      // Gmail address, set after OAuth
+  createdAt    DateTime      @default(now())
+  lastSyncedAt DateTime?                  // last successful /emails/sync — used for rate limiting
+  oauthToken   OAuthToken?
+  ledger       LedgerEntry[]
+  sessions     Session[]
+}
+
+// A bearer session granted after the user proves Gmail ownership via OAuth.
+// Only the SHA-256 hash of the token is stored, so a DB leak can't be replayed.
+// The raw token lives in the client's localStorage and is sent as
+// `Authorization: Bearer <token>` — it's the credential, NOT the user id.
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  tokenHash String   @unique
+  expiresAt DateTime                      // sessions expire (default 90d) — set on creation
+  createdAt DateTime @default(now())
+}
+
+// Short-lived, single-use handoff code. The OAuth callback can't safely put a
+// long-lived token in the redirect URL (URLs leak via history/referrer/logs),
+// so it issues a one-time code; the frontend exchanges it for a real session.
+model LoginCode {
+  code      String   @id
+  userId    String
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+}
+
+// Monthly spending budget, per category or 'overall' (USD). Drives the Budgets
+// card + over-budget flags in the Monitor.
+model Budget {
+  id        String   @id @default(cuid())
+  userId    String
+  category  String   // a CATEGORY value, or 'overall'
+  amount    Float    // monthly budget in USD
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, category])
 }
 
 model OAuthToken {
@@ -36,7 +74,47 @@ model LedgerEntry {
   date        DateTime
   description String
   emailId     String   // Gmail message ID — used for deduplication
+  senderEmail String?  // parsed From address (for the unsubscribe helper)
+  unsubscribe String?  // List-Unsubscribe link (https preferred, else mailto)
+  termMonths  Int?     // if the charge covers a multi-month term (e.g. 6 = 6-month plan)
+  // The actionable FUTURE date for this entry, semantics per category:
+  //   order/travel/food/entertainment → delivery ETA / departure / check-in / event date
+  //   marketing                       → promo expiry
+  eventDate   DateTime? // powers the Upcoming floater + promo expiry
+  promoCode   String?   // coupon/promo code to use at checkout (marketing)
+  discount    String?   // short offer text, e.g. "20% off" (marketing)
+  categoryLocked Boolean @default(false) // user manually set the category — never auto-reclassify
   createdAt   DateTime @default(now())
 
   @@unique([userId, emailId])
+}
+
+// Every Gmail message the app has EXAMINED (sent to Claude), regardless of
+// whether it produced a LedgerEntry. This is the dedup source for /emails/sync:
+// keying off this — not off stored purchases — means non-relevant emails aren't
+// re-fetched/re-classified each pass, so a backfill always marches older and we
+// never re-bill Claude for the same mail.
+model ProcessedEmail {
+  userId    String
+  emailId   String
+  createdAt DateTime @default(now())
+
+  @@id([userId, emailId])
+}
+
+// Someone who isn't a test user yet asking to be added (Testing-mode access).
+model Acceptance {
+  id        String   @id @default(cuid())
+  userId    String   // canonical user id
+  vendor    String   // vendor/sender the user has marked "Accepted"
+  createdAt DateTime @default(now())
+
+  @@unique([userId, vendor])
+}
+
+model AccessRequest {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  note      String?
+  createdAt DateTime @default(now())
 }

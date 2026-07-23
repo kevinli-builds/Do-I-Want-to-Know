@@ -6,3 +6,10 @@ dist/
 .expo/
 .DS_Store
 .claude/
+
+# Local secrets / notes — never commit
+Token Encryption Key.*
+*.key
+secrets.*
+
+.vercel

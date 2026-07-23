@@ -24,7 +24,7 @@
       "package": "com.diwtkn.app"
     },
     "extra": {
-      "apiUrl": "http://localhost:3000"
+      "apiUrl": "https://do-i-want-to-know.onrender.com"
     }
   }
 }

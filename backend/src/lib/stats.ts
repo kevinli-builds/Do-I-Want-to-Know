@@ -1,0 +1,354 @@
+// Pure aggregation functions — no I/O, easy to unit-test.
+// Called by both the /wrapped route and the /export route.
+
+import type { LedgerEntry } from '@prisma/client'
+import { SPEND_CATEGORIES } from './categories'
+import { normalizeToUsd } from './fx'
+
+// ── Types ──────────────────────────────────────────────────────────────────────
+
+export interface CategoryStat {
+  count: number
+  spend: number
+}
+
+export interface VendorStat {
+  vendor: string
+  count: number
+}
+
+export interface CharityStat {
+  vendor: string
+  count: number
+  total: number
+}
+
+export interface SpammerStat {
+  vendor: string
+  count: number
+  senderEmail: string | null
+  unsubscribe: string | null
+}
+
+export interface SubscriptionInsight {
+  vendor: string
+  monthlyEstimate: number          // cost normalized to a monthly figure
+  lastAmount: number | null        // most recent known charge amount
+  cadence: 'weekly' | 'monthly' | 'annual'
+  lastCharge: string               // ISO date of most recent charge
+  chargeCount: number
+  active: boolean                  // charged within the expected recency window
+}
+
+export interface MostExpensive {
+  vendor: string
+  amount: number | null
+  description: string
+  date: Date
+  emailId: string
+  termMonths: number | null
+}
+
+export interface WrappedStats {
+  totalSpend: number       // NET of refunds
+  refundTotal: number      // total refunded (positive)
+  byCategory: Record<string, CategoryStat>
+  topVendors: VendorStat[]
+  mostExpensive: MostExpensive | null
+  monthlySpend: Record<string, number>
+  subscriptions: string[]
+  subscriptionCount: number
+  subscriptionInsights: SubscriptionInsight[]
+  monthlySubscriptionCost: number
+  annualSubscriptionCost: number
+  topSpammers: SpammerStat[]
+  charities: CharityStat[]
+  charityTotal: number
+  funFacts: FunFact[]
+}
+
+// Playful "Wrapped moments" — display-ready strings so the UI just renders them.
+export interface FunFact {
+  emoji: string
+  label: string
+  value: string
+  detail?: string
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function round2(n: number) {
+  return Math.round(n * 100) / 100
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+}
+
+// ── Wrapped moments (fun facts) ─────────────────────────────────────────────
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+const factUsd = (n: number) => '$' + Math.round(n).toLocaleString('en-US')
+const factDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+const dayStart = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime()
+
+// Compute playful highlights from the (USD-normalized) purchase entries. Only
+// returns facts that have enough data to be meaningful.
+function computeFunFacts(spendEntries: LedgerEntry[]): FunFact[] {
+  const facts: FunFact[] = []
+  if (spendEntries.length === 0) return facts
+
+  const sorted = [...spendEntries].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const withAmt = sorted.filter(e => e.amount != null && e.amount > 0)
+
+  // First purchase of the window
+  const first = sorted[0]
+  facts.push({ emoji: '🌱', label: 'First purchase', value: factDate(first.date), detail: first.vendor })
+
+  // Biggest spending day
+  const byDay = new Map<number, { sum: number; count: number; date: Date }>()
+  for (const e of withAmt) {
+    const k = dayStart(e.date)
+    const cur = byDay.get(k) ?? { sum: 0, count: 0, date: e.date }
+    cur.sum += e.amount!; cur.count++
+    byDay.set(k, cur)
+  }
+  if (byDay.size > 0) {
+    const big = [...byDay.values()].reduce((m, d) => (d.sum > m.sum ? d : m))
+    facts.push({ emoji: '💥', label: 'Biggest spending day', value: factDate(big.date), detail: `${factUsd(big.sum)} · ${big.count} purchase${big.count === 1 ? '' : 's'}` })
+  }
+
+  // Favorite spending day of the week (by amount)
+  if (withAmt.length > 0) {
+    const dow = Array(7).fill(0)
+    for (const e of withAmt) dow[e.date.getDay()] += e.amount!
+    let top = 0
+    for (let i = 1; i < 7; i++) if (dow[i] > dow[top]) top = i
+    if (dow[top] > 0) facts.push({ emoji: '📅', label: 'Favorite spending day', value: `${WEEKDAYS[top]}s`, detail: `${factUsd(dow[top])} total` })
+  }
+
+  // Busiest month (by purchase count)
+  const byMonth = new Map<string, { count: number; date: Date }>()
+  for (const e of sorted) {
+    const k = monthKey(e.date)
+    const cur = byMonth.get(k) ?? { count: 0, date: new Date(e.date.getFullYear(), e.date.getMonth(), 1) }
+    cur.count++
+    byMonth.set(k, cur)
+  }
+  if (byMonth.size > 1) {
+    const busy = [...byMonth.values()].reduce((m, d) => (d.count > m.count ? d : m))
+    facts.push({ emoji: '🔥', label: 'Busiest month', value: busy.date.toLocaleDateString('en-US', { month: 'long', year: 'numeric' }), detail: `${busy.count} purchases` })
+  }
+
+  // Longest no-spend streak (gap between purchase days)
+  const dayTimes = [...new Set(withAmt.map(e => dayStart(e.date)))].sort((a, b) => a - b)
+  if (dayTimes.length >= 2) {
+    let maxGap = 0, gapEnd = dayTimes[0]
+    for (let i = 1; i < dayTimes.length; i++) {
+      const gap = Math.round((dayTimes[i] - dayTimes[i - 1]) / 86_400_000) - 1
+      if (gap > maxGap) { maxGap = gap; gapEnd = dayTimes[i] }
+    }
+    if (maxGap >= 2) facts.push({ emoji: '🏝️', label: 'Longest no-spend streak', value: `${maxGap} days`, detail: `broken ${factDate(new Date(gapEnd))}` })
+  }
+
+  // Vendors visited
+  const vendors = new Set(sorted.map(e => e.vendor))
+  if (vendors.size >= 2) facts.push({ emoji: '🏪', label: 'Vendors visited', value: `${vendors.size}`, detail: 'different merchants' })
+
+  return facts
+}
+
+function topByFreq(entries: LedgerEntry[], limit: number): VendorStat[] {
+  const freq: Record<string, number> = {}
+  for (const e of entries) {
+    freq[e.vendor] = (freq[e.vendor] ?? 0) + 1
+  }
+  return Object.entries(freq)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([vendor, count]) => ({ vendor, count }))
+}
+
+// Rank marketing senders by volume, enriched with the most recent sender email
+// + unsubscribe link so the UI can offer a one-click unsubscribe.
+// Assumes `marketingEntries` is sorted newest-first.
+function topSpammersFrom(marketingEntries: LedgerEntry[], limit: number): SpammerStat[] {
+  const acc: Record<string, SpammerStat> = {}
+  for (const e of marketingEntries) {
+    if (!acc[e.vendor]) {
+      acc[e.vendor] = {
+        vendor: e.vendor,
+        count: 0,
+        senderEmail: e.senderEmail ?? null,
+        unsubscribe: e.unsubscribe ?? null,
+      }
+    }
+    const s = acc[e.vendor]
+    s.count++
+    // Backfill from older emails if the newest lacked the field
+    if (!s.senderEmail && e.senderEmail) s.senderEmail = e.senderEmail
+    if (!s.unsubscribe && e.unsubscribe) s.unsubscribe = e.unsubscribe
+  }
+  return Object.values(acc)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, limit)
+}
+
+// Analyze subscription entries per vendor: detect cadence from the gaps between
+// charges, estimate a normalized monthly cost, and flag whether it's still active.
+export function computeSubscriptionInsights(subEntries: LedgerEntry[]): {
+  insights: SubscriptionInsight[]
+  monthlyCost: number
+  annualCost: number
+} {
+  const byVendor: Record<string, LedgerEntry[]> = {}
+  for (const e of subEntries) (byVendor[e.vendor] ??= []).push(e)
+
+  const insights: SubscriptionInsight[] = Object.entries(byVendor).map(([vendor, list]) => {
+    const sorted = [...list].sort((a, b) => a.date.getTime() - b.date.getTime())
+    const withAmount = sorted.filter(e => e.amount != null && e.amount > 0)
+    const lastWithAmount = withAmount.length ? withAmount[withAmount.length - 1] : null
+    const lastAmount = lastWithAmount?.amount ?? null
+    // If the charge explicitly covers a multi-month term, amortize directly.
+    const lastTerm = lastWithAmount?.termMonths ?? null
+
+    // Median gap between consecutive charges (days)
+    let medianGap = 30.44 // assume monthly when we only have one sighting
+    if (sorted.length >= 2) {
+      const gaps: number[] = []
+      for (let i = 1; i < sorted.length; i++) {
+        gaps.push((sorted[i].date.getTime() - sorted[i - 1].date.getTime()) / 86_400_000)
+      }
+      gaps.sort((a, b) => a - b)
+      medianGap = gaps[Math.floor(gaps.length / 2)] || 30.44
+    }
+
+    let cadence: SubscriptionInsight['cadence']
+    if (lastTerm && lastTerm >= 12) cadence = 'annual'
+    else if (medianGap <= 10) cadence = 'weekly'
+    else if (medianGap > 250) cadence = 'annual'
+    else cadence = 'monthly'
+
+    // Prefer an explicit term (e.g. 6-month plan) over the gap-based estimate.
+    const monthlyEstimate =
+      lastAmount == null
+        ? 0
+        : lastTerm && lastTerm > 1
+          ? round2(lastAmount / lastTerm)
+          : round2(lastAmount * (30.44 / medianGap))
+
+    const lastCharge = sorted[sorted.length - 1].date
+    const ageDays = (Date.now() - lastCharge.getTime()) / 86_400_000
+    const active = cadence === 'annual' ? ageDays <= 400 : ageDays <= 45
+
+    return {
+      vendor,
+      monthlyEstimate,
+      lastAmount,
+      cadence,
+      lastCharge: lastCharge.toISOString().slice(0, 10),
+      chargeCount: list.length,
+      active,
+    }
+  })
+
+  insights.sort((a, b) => b.monthlyEstimate - a.monthlyEstimate)
+  // "Current burn" counts active subscriptions only
+  const monthlyCost = round2(
+    insights.filter(i => i.active).reduce((sum, i) => sum + i.monthlyEstimate, 0)
+  )
+  return { insights, monthlyCost, annualCost: round2(monthlyCost * 12) }
+}
+
+// ── Main aggregation ──────────────────────────────────────────────────────────
+
+export function computeStats(rawEntries: LedgerEntry[], rates: Record<string, number> = { USD: 1 }): WrappedStats {
+  // Normalize every amount to USD up front, so all downstream math (totals,
+  // monthly spend, category breakdown, biggest purchase, subscription
+  // estimates) is single-currency. The original rows are untouched.
+  const entries = normalizeToUsd(rawEntries, rates)
+
+  const spendEntries     = entries.filter(e => SPEND_CATEGORIES.includes(e.category as any))
+  const marketingEntries = entries.filter(e => e.category === 'marketing')
+  const charityEntries   = entries.filter(e => e.category === 'charity')
+  const refundEntries    = entries.filter(e => e.category === 'refund')
+
+  // Refunds are money back — they offset spend
+  const refundTotal = round2(refundEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0))
+  const grossSpend = spendEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0)
+  // Net total spend = purchases minus refunds
+  const totalSpend = round2(grossSpend - refundTotal)
+
+  // Category breakdown (all categories)
+  const byCategory: Record<string, CategoryStat> = {}
+  for (const e of entries) {
+    if (!byCategory[e.category]) byCategory[e.category] = { count: 0, spend: 0 }
+    byCategory[e.category].count++
+    byCategory[e.category].spend += e.amount ?? 0
+  }
+  // Round spend values
+  for (const cat of Object.keys(byCategory)) {
+    byCategory[cat].spend = round2(byCategory[cat].spend)
+  }
+
+  // Top purchase vendors (marketing excluded)
+  const topVendors = topByFreq(spendEntries, 5)
+
+  // Most expensive single purchase
+  const withAmount = spendEntries.filter(e => e.amount != null && e.amount > 0)
+  const mostExpensive = withAmount.length > 0
+    ? withAmount.reduce((max, e) => e.amount! > max.amount! ? e : max)
+    : null
+
+  // Monthly spend, net of refunds
+  const monthlySpend: Record<string, number> = {}
+  for (const e of spendEntries) {
+    if (!e.amount) continue
+    const key = monthKey(e.date)
+    monthlySpend[key] = round2((monthlySpend[key] ?? 0) + e.amount)
+  }
+  for (const e of refundEntries) {
+    if (!e.amount) continue
+    const key = monthKey(e.date)
+    monthlySpend[key] = round2((monthlySpend[key] ?? 0) - e.amount)
+  }
+
+  // Subscriptions
+  const subEntries = entries.filter(e => e.category === 'subscription')
+  const subscriptions = [...new Set(subEntries.map(e => e.vendor))]
+  const subRadar = computeSubscriptionInsights(subEntries)
+
+  // Top marketing senders (with unsubscribe metadata)
+  const topSpammers = topSpammersFrom(marketingEntries, 10)
+
+  // Charities
+  const charityMap: Record<string, { count: number; total: number }> = {}
+  for (const e of charityEntries) {
+    if (!charityMap[e.vendor]) charityMap[e.vendor] = { count: 0, total: 0 }
+    charityMap[e.vendor].count++
+    charityMap[e.vendor].total += e.amount ?? 0
+  }
+  const charities: CharityStat[] = Object.entries(charityMap)
+    .sort((a, b) => b[1].total - a[1].total)
+    .map(([vendor, { count, total }]) => ({ vendor, count, total: round2(total) }))
+  const charityTotal = round2(charityEntries.reduce((sum, e) => sum + (e.amount ?? 0), 0))
+
+  return {
+    totalSpend,
+    refundTotal,
+    byCategory,
+    topVendors,
+    mostExpensive: mostExpensive
+      ? { vendor: mostExpensive.vendor, amount: mostExpensive.amount, description: mostExpensive.description, date: mostExpensive.date, emailId: mostExpensive.emailId, termMonths: mostExpensive.termMonths }
+      : null,
+    monthlySpend,
+    subscriptions,
+    subscriptionCount: subscriptions.length,
+    subscriptionInsights: subRadar.insights,
+    monthlySubscriptionCost: subRadar.monthlyCost,
+    annualSubscriptionCost: subRadar.annualCost,
+    topSpammers,
+    charities,
+    charityTotal,
+    funFacts: computeFunFacts(spendEntries),
+  }
+}
