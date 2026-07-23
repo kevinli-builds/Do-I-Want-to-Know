@@ -405,7 +405,8 @@ This project went through several pivots in a series of Claude Code sessions:
 
 ## Git
 
-- Remote: `https://github.com/snowwarrior1-alt/Do-I-Want-to-Know`
+- Remote: `https://github.com/kevinli-builds/Do-I-Want-to-Know` (the repo moved to the
+  `kevinli-builds` account; the local git *user* is still `snowwarrior1-alt`)
 - Branch: `main`
 - Git user: `snowwarrior1-alt` / `snowwarrior1-alt@users.noreply.github.com`
 
