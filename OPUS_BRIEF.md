@@ -60,8 +60,25 @@ total. **Hardening found by the tests:** a max_tokens-truncated Claude response 
 regex-parse cleanly (or to `{}`) and silently mark a whole batch not-relevant —
 permanent email loss; `extractEntries` now throws on `stop_reason === 'max_tokens'`
 so truncated batches retry next sync.
-**Next → (highest value first)** — §9 A3 vendor drilldown pages or A7 ledger
-workbench ("Power reader"). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§9 A3 vendor drilldown SHIPPED (2026-07-23) — "Power reader" release started.**
+Tap the 📊 next to a vendor name anywhere (Wrapped top vendors / biggest purchase /
+top senders / subscription radar, Monitor top senders + renewals + price steps +
+zombie cards, every Audit row) → a modal reader for that vendor: net spend with the
+refund split, typical order, days since last, buying rhythm, monthly spend line chart,
+order-size histogram, longest dry spell, refunds recovered, category mix, and the
+full record list with per-email Gmail links. Pure `lib/vendorStats.ts`
+(`buildVendorProfile` + `listVendors`, 13 vitest tests, 32 total in `web/`); zero
+backend work — it reuses the `/transactions` list the app already fetches, fetched
+once on first open and reused for every later vendor. Promo-only senders get a
+"no purchases on record" variant. Verified in demo mode on a production build at
+desktop + 375px; the 📊 opener is 44×44 and always visible (never a hover reveal).
+Note: the `diwtk-web-prod` launch config (`:3011`, `npm run start -- -p 3011`) this brief
+kept referencing did not actually exist — recreated it, but `.claude/` is gitignored, so a
+fresh clone has to add it again.
+**Next → (highest value first)** — §9 A7 ledger workbench (filters row on the Audit
+tab: free text + amount/date range + category chips, saved views, CSV of the filtered
+set), then A8 anomaly feedback loop (the only §9 item that touches schema) to close
+the "Power reader" release. **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served

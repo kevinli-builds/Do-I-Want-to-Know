@@ -5,8 +5,9 @@ import { getTransactions, gmailMessageUrl, getAcceptances, setAcceptance, update
 import { catEmoji, catLabel, CATEGORY_KEYS } from '../lib/categories'
 import { money } from '../lib/format'
 import { fmtDate } from '../lib/dates'
+import { VendorButton } from './VendorPanel'
 
-export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId: string; refreshKey?: number; onChanged?: () => void }) {
+export function TransactionsView({ userId, refreshKey = 0, onChanged, onOpenVendor }: { userId: string; refreshKey?: number; onChanged?: () => void; onOpenVendor?: (v: string) => void }) {
   const [all, setAll] = useState<Transaction[] | null>(null)
   const [error, setError] = useState(false)
   const [search, setSearch] = useState('')
@@ -240,6 +241,7 @@ export function TransactionsView({ userId, refreshKey = 0, onChanged }: { userId
                         <>
                           {t.vendor}
                           <button className="vendor-edit-btn" onClick={() => startEditVendor(t.id, t.vendor)} title="Rename vendor">✏️</button>
+                          {onOpenVendor && <VendorButton vendor={t.vendor} onOpen={onOpenVendor} />}
                         </>
                       )}
                     </span>

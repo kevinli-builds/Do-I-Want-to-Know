@@ -9,6 +9,7 @@ import { useTxnDrilldown } from '../lib/useTxnDrilldown'
 import { AnalyticsChart } from './AnalyticsChart'
 import { CashflowCalendar } from './CashflowCalendar'
 import { WhatIfCard } from './WhatIfCard'
+import { VendorButton } from './VendorPanel'
 
 // One plain-language line, e.g. "Spending grew 5% (March 2026 → April 2026): $1,200 → $1,260."
 function trendSentence(c: TrendChange): string {
@@ -63,7 +64,7 @@ function Kpi({ label, pair, kind }: { label: string; pair: KpiPair; kind: 'money
 // Dedicated "Subscription health" panel: burn-delta headline, price-step
 // history (confirmed vs early), zombie subs with Unsubscribe deep-links.
 // Renders nothing until there's at least one thing worth saying.
-function SubHealthPanel({ health }: { health: SubHealth }) {
+function SubHealthPanel({ health, onOpenVendor }: { health: SubHealth; onOpenVendor?: (v: string) => void }) {
   const delta = health.monthlyDeltaVsYearAgo
   const hasContent = (delta != null && Math.abs(delta) >= 0.5) || health.steps.length > 0 || health.zombies.length > 0
   if (!hasContent) return null
@@ -86,6 +87,7 @@ function SubHealthPanel({ health }: { health: SubHealth }) {
             <div className="row" key={`${s.vendor}-${s.atDate}-${i}`}>
               <span className="label">
                 {s.pct > 0 ? '📈' : '📉'} {s.vendor}
+                {onOpenVendor && <VendorButton vendor={s.vendor} onOpen={onOpenVendor} />}
                 <span className={`health-badge ${s.confirmed ? 'confirmed' : 'early'}`}>
                   {s.confirmed ? 'confirmed' : `seen ${s.chargesAfter}×`}
                 </span>
@@ -108,7 +110,10 @@ function SubHealthPanel({ health }: { health: SubHealth }) {
           {health.zombies.map(z => (
             <div className="zombie-card" key={z.vendor}>
               <div className="zombie-head">
-                <span className="zombie-vendor">🧟 {z.vendor}</span>
+                <span className="zombie-vendor">
+                  🧟 {z.vendor}
+                  {onOpenVendor && <VendorButton vendor={z.vendor} onOpen={onOpenVendor} />}
+                </span>
                 <span className="zombie-cost">{moneyFull(z.monthlyEstimate)}/mo</span>
               </div>
               <div className="zombie-meta">
@@ -132,7 +137,7 @@ function SubHealthPanel({ health }: { health: SubHealth }) {
   )
 }
 
-export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refreshKey?: number }) {
+export function MonitorView({ userId, refreshKey = 0, onOpenVendor }: { userId: string; refreshKey?: number; onOpenVendor?: (v: string) => void }) {
   const [period, setPeriod] = useState<'month' | 'year'>('month')
   const [data, setData] = useState<MonitorData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -385,7 +390,10 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
             <div className="sub-section-label">Renewing soon</div>
             {subs.renewals.slice(0, 8).map(r => (
               <div className="row" key={`${r.vendor}-${r.date}`}>
-                <span className="label">🔁 {r.vendor}</span>
+                <span className="label">
+                  🔁 {r.vendor}
+                  {onOpenVendor && <VendorButton vendor={r.vendor} onOpen={onOpenVendor} />}
+                </span>
                 <span className="value">
                   {relativeDay(r.date)}{r.amount != null ? ` · ${moneyFull(r.amount)}` : ''}
                 </span>
@@ -400,7 +408,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
       </div>
 
       {/* Subscription health — price-step history, burn delta, zombie subs */}
-      {subs.health && <SubHealthPanel health={subs.health} />}
+      {subs.health && <SubHealthPanel health={subs.health} onOpenVendor={onOpenVendor} />}
 
       {/* Inbox-load monitor */}
       {data.topSenders && data.topSenders.length > 0 && (
@@ -420,6 +428,7 @@ export function MonitorView({ userId, refreshKey = 0 }: { userId: string; refres
                   <span className="label">
                     <span className="rank">{i + 1}</span>{s.vendor}
                     <span className="chev">{open.has(s.vendor) ? '▾' : '▸'}</span>
+                    {onOpenVendor && <VendorButton vendor={s.vendor} onOpen={onOpenVendor} />}
                   </span>
                   <span className="value">
                     {s.count}

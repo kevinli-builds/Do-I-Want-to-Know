@@ -1625,3 +1625,132 @@ body {
   flex: none;
 }
 .tour-help:hover { background: rgba(108, 99, 255, 0.12); color: var(--accent, #6c63ff); }
+
+/* ── Vendor drilldown (§9 A3) ───────────────────────────────────────────────── */
+/* The opener sits next to a vendor name anywhere in the app. Always visible —
+   an opacity-0 + :hover reveal would be untappable on touch screens. */
+.vendor-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px;
+  margin-left: 6px;
+  border-radius: 6px;
+  opacity: 0.55;
+  vertical-align: middle;
+}
+.vendor-btn:hover { opacity: 1; background: rgba(108, 99, 255, 0.12); }
+
+.vp-modal {
+  background: var(--card);
+  border-radius: 20px;
+  padding: 20px;
+  max-width: 560px;
+  width: 100%;
+  margin: auto;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.3);
+}
+.vp-headline {
+  font-size: 15px;
+  color: var(--muted);
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+.vp-headline strong { color: var(--ink); font-weight: 800; font-variant-numeric: tabular-nums; }
+
+.vp-facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+.vp-fact {
+  background: #faf9ff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+.vp-fact-label {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.vp-fact-value {
+  font-size: 19px;
+  font-weight: 800;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  margin-top: 3px;
+}
+.vp-fact-hint { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+.vp-section { margin-bottom: 18px; }
+
+.vp-bucket {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 0;
+}
+.vp-bucket-label {
+  font-size: 12px;
+  color: var(--muted);
+  width: 72px;
+  flex: none;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.vp-bucket-bar {
+  flex: 1;
+  height: 14px;
+  background: #f1f0fa;
+  border-radius: 7px;
+  overflow: hidden;
+}
+.vp-bucket-fill {
+  display: block;
+  height: 100%;
+  background: var(--purple);
+  border-radius: 7px;
+}
+.vp-bucket-count {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--ink);
+  width: 24px;
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.vp-note {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.6;
+  background: #faf9ff;
+  border-radius: 10px;
+  padding: 9px 12px;
+  margin-bottom: 10px;
+}
+.vp-note strong { color: var(--ink); font-weight: 800; }
+.vp-note-good { background: rgba(14, 165, 233, 0.08); }
+.vp-note-good strong { color: #0284c7; }
+
+@media (max-width: 640px) {
+  .vp-modal { padding: 16px; border-radius: 16px; }
+  .vp-fact-value { font-size: 17px; }
+  /* 44px touch target for the opener on phones, and never dimmed on touch */
+  .vendor-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 0;
+    margin-left: 0;
+    opacity: 1;
+  }
+}

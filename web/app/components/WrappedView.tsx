@@ -10,6 +10,7 @@ import { SpendChart } from './SpendChart'
 import { ScopePicker, monthLabel } from './ScopePicker'
 import { GuessReveal } from './GuessReveal'
 import { ShareCard } from './ShareCard'
+import { VendorButton } from './VendorPanel'
 
 export function WrappedView({
   userId,
@@ -22,6 +23,7 @@ export function WrappedView({
   onOpenAudit,
   onDisconnect,
   onDeleteData,
+  onOpenVendor,
   demo = false,
 }: {
   userId: string
@@ -34,6 +36,7 @@ export function WrappedView({
   onOpenAudit?: () => void
   onDisconnect?: () => void
   onDeleteData?: () => void // full data erasure — irreversible, unlike disconnect
+  onOpenVendor?: (vendor: string) => void
   demo?: boolean
 }) {
   const stats = data.stats
@@ -273,7 +276,10 @@ export function WrappedView({
             <div className="card">
               <h2>💸 Biggest Purchase</h2>
               <div className="row">
-                <span className="label">{stats.mostExpensive.vendor}</span>
+                <span className="label">
+                  {stats.mostExpensive.vendor}
+                  {onOpenVendor && <VendorButton vendor={stats.mostExpensive.vendor} onOpen={onOpenVendor} />}
+                </span>
                 <span className="value">
                   {stats.mostExpensive.amount != null ? money(stats.mostExpensive.amount) : '—'}
                 </span>
@@ -312,6 +318,7 @@ export function WrappedView({
                       <span className="label">
                         <span className="rank">{i + 1}</span>
                         {v.vendor}{chev(key)}
+                        {onOpenVendor && <VendorButton vendor={v.vendor} onOpen={onOpenVendor} />}
                       </span>
                       <span className="value">
                         {v.count} order{v.count === 1 ? '' : 's'}
@@ -347,6 +354,7 @@ export function WrappedView({
                       <span className="label">
                         <span className="rank">{i + 1}</span>
                         {s.vendor}{chev(key)}
+                        {onOpenVendor && <VendorButton vendor={s.vendor} onOpen={onOpenVendor} />}
                       </span>
                       <span className="value">
                         {s.count} email{s.count === 1 ? '' : 's'}
@@ -433,6 +441,7 @@ export function WrappedView({
                     <div {...rowProps(key)}>
                       <span className="label" style={{ opacity: s.active ? 1 : 0.5 }}>
                         {s.vendor}{chev(key)}
+                        {onOpenVendor && <VendorButton vendor={s.vendor} onOpen={onOpenVendor} />}
                         <span className="sub-meta">
                           {s.cadence}
                           {!s.active

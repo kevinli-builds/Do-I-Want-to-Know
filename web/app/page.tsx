@@ -15,6 +15,7 @@ import { UnsubscribeView } from './components/UnsubscribeView'
 import { PromotionsView } from './components/PromotionsView'
 import { UpcomingFloater } from './components/UpcomingFloater'
 import { IntroTour } from './components/IntroTour'
+import { VendorPanel } from './components/VendorPanel'
 
 export default function Home() {
   const [userId,    setUserId]    = useState('')
@@ -52,6 +53,8 @@ export default function Home() {
   const slowStartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   // First-visit tour of the dashboard (also reopenable via the ? tab button)
   const [showTour, setShowTour] = useState(false)
+  // Vendor drilldown (§9 A3) — opened from a vendor name on any tab
+  const [vendor, setVendor] = useState<string | null>(null)
 
   const closeTour = useCallback(() => {
     setShowTour(false)
@@ -339,21 +342,31 @@ export default function Home() {
             onOpenAudit={() => setView('audit')}
             onDisconnect={handleDisconnect}
             onDeleteData={handleDeleteData}
+            onOpenVendor={setVendor}
             demo={demo}
           />
         ) : view === 'monitor' ? (
-          <MonitorView userId={userId} refreshKey={refreshKey} />
+          <MonitorView userId={userId} refreshKey={refreshKey} onOpenVendor={setVendor} />
         ) : view === 'audit' ? (
           <TransactionsView
             userId={userId}
             refreshKey={refreshKey}
             onChanged={() => { loadWrapped(userId, scope).catch(() => {}) }}
+            onOpenVendor={setVendor}
           />
         ) : view === 'promotions' ? (
           <PromotionsView userId={userId} refreshKey={refreshKey} />
         ) : (
           <UnsubscribeView userId={userId} refreshKey={refreshKey} />
         )}
+
+        {/* Vendor drilldown — stays mounted so its ledger fetch is reused */}
+        <VendorPanel
+          userId={userId}
+          vendor={vendor}
+          onClose={() => setVendor(null)}
+          onOpenAudit={() => setView('audit')}
+        />
 
         {/* Upcoming deliveries / flights / events — top-right floater */}
         <UpcomingFloater userId={userId} refreshKey={refreshKey} />
