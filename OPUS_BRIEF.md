@@ -10,6 +10,15 @@ below is accordingly short. Verify current state before implementing._
 
 ## 0. Status ledger (2026-07-05) + how to pick up
 
+**⚠️ DEPLOY OWED — A8 needs a Render migration + deploy (2026-07-24).** §9 A8 (below)
+is the FIRST backend change since the last Render deploy, and it adds a table
+(`VendorTolerance`, migration `20260607000000_vendor_tolerance`). `start:prod` runs
+`prisma migrate deploy` before boot, so a **"Deploy latest commit"** on Render applies
+it automatically — but until that click, the new `/tolerances` routes 404 in prod and
+the Monitor's "Unusual Charges" grade buttons will fail (the UI reverts the ack on
+error, so it degrades safely). Vercel auto-deploys the web half on push. This also
+carries every backend commit still unshipped from before (see the C1 note below).
+
 **✅ SECURITY — C1 IDOR fix VERIFIED LIVE (2026-07-18).** Checked the Render dashboard
 deploy list: the running deploy is `d051f14` (deployed 2026-07-12 23:54 EDT), which
 contains the fix. ⚠️ Note: the 2026-07-18 manual deploy re-ran `d051f14`, NOT the
@@ -90,12 +99,27 @@ vendor/description beginning `= + - @` or tab/CR is apostrophe-prefixed, since t
 text is email-derived (tested). Verified in demo mode on a production build: filters
 compose (379 → 148 → 17 → 3), a saved view round-trips exactly, the CSV blob carries
 only the filtered rows, all 44px touch targets and no overflow at 375px.
-**Next → (highest value first)** — §9 A8 anomaly feedback loop closes the "Power
-reader" release; it is the only §9 item that touches schema (one small table:
-userId, vendor, toleranceMultiplier + a threshold-math change), so it needs a
-migration + a Render deploy, unlike A2/A3/A5/A7. After that §9 is down to A6
-(promise tracker, explicitly "prototype before promising precision") and A9
-(print-CSS annual report), or §6 W2 the weekly digest email for retention. **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
+**§9 A8 anomaly feedback loop SHIPPED (2026-07-24) — "Power reader" release COMPLETE
+(A3+A7+A8).** The Monitor's unusual-charge alerts became a structured, gradeable
+"🔍 Unusual Charges" panel: each spike explains itself ("6× your usual $57.79 from
+them") and carries Expected / Not expected buttons. Backend: new `VendorTolerance`
+table (migration `20260607000000_vendor_tolerance`); `lib/tolerance.ts` pure math
+(`nextMultiplier` raises a vendor's bar to `ratio × 1.25` on Expected — never below
+the default 3× or above the 25× cap — and drops to WATCH=2× on Not expected);
+`computeUnusual` now takes per-vendor multipliers and emits structured `anomalies`
+alongside the flag-strip text, so the UI never parses flag strings; `/tolerances`
+router (GET/PUT/DELETE, ownership-scoped, in the authz matrix); erasure in
+`DELETE /users/me` extended to the new table (CASA). Web: `AnomalyPanel` in
+MonitorView (grading is optimistic + reverts on error, acknowledges inline rather
+than vanishing); demo mode ports `computeUnusual` faithfully + seeds one deterministic
+current-month Amazon spike so the panel always demos. **77 backend tests / 55 web.**
+Verified in demo mode on a production build: the seeded $349 spike shows 6× the $57.79
+median, Expected acknowledges inline, all 44px targets, no overflow at 375px.
+House rule honored — compares the user only to their own vendor history.
+**Next → (highest value first)** — §9 is down to A6 (promise tracker; §9 explicitly
+says "prototype against real data before promising precision" — fuzzy join, do it
+carefully) and A9 (print-CSS annual report, pure client-side, deploy-free), or pivot
+to §6 W2 the weekly digest email (retention; needs Resend + a Render cron). **Delete-my-data SHIPPED (2026-07-11)** — `DELETE /users/me`
 (session-authed, transactional erasure of ledger/processed/acceptances/budgets/codes/sessions/tokens/user
 + best-effort Google revoke) + double-confirmed "Delete my data" button in WrappedView + privacy-policy
 retention section updated. **Privacy policy REWRITTEN (2026-07-18)** — `PRIVACY_POLICY.md` + the served

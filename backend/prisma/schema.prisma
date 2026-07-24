@@ -53,6 +53,20 @@ model Budget {
   @@unique([userId, category])
 }
 
+// Per-vendor sensitivity for unusual-charge alerts (§9 A8). The spike test is
+// "charge >= median(prior charges) * multiplier"; the default multiplier is 3,
+// and marking an alert Expected / Not expected stores a personal one here.
+model VendorTolerance {
+  id         String   @id @default(cuid())
+  userId     String
+  vendor     String
+  multiplier Float    // >1; higher = less sensitive (fewer alerts)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([userId, vendor])
+}
+
 model OAuthToken {
   id           String   @id @default(cuid())
   userId       String   @unique

@@ -97,6 +97,18 @@ export interface MonitorFlag {
   kind: 'up' | 'down' | 'new' | 'info'
   text: string
 }
+
+// A structured unusual-charge alert (§9 A8) — the panel the user grades with
+// Expected / Not expected. `new` vendors have no history, so their numbers are
+// null. Optional in this type: older backend deploys don't send it.
+export interface Anomaly {
+  kind: 'spike' | 'new'
+  vendor: string
+  amount: number
+  median: number | null
+  ratio: number | null
+  multiplier: number | null // the sensitivity in force when this fired
+}
 export interface TrendChange {
   fromLabel: string
   toLabel: string
@@ -139,6 +151,7 @@ export interface MonitorData {
   topSenders?: { vendor: string; count: number; prevCount: number }[]
   budgets?: BudgetProgress[]
   flags?: MonitorFlag[]
+  anomalies?: Anomaly[]
   trend?: { mom: TrendChange | null; yoy: TrendChange | null }
 }
 

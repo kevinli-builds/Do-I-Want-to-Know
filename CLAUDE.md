@@ -79,7 +79,9 @@ Do I Want To Know/
 │       ├── 20260602000000_session_expiry/   Adds Session.expiresAt (sessions expire, default 90d)
 │       ├── 20260603000000_processed_emails/  Adds ProcessedEmail (examined-email dedup; backfilled from LedgerEntry)
 │       ├── 20260604000000_upcoming_promos/    Adds LedgerEntry.eventDate + promoCode + discount
-│       └── 20260605000000_category_lock/       Adds LedgerEntry.categoryLocked (manual category override)
+│       ├── 20260605000000_category_lock/       Adds LedgerEntry.categoryLocked (manual category override)
+│       ├── 20260606000000_budgets/             Adds Budget (monthly per-category/overall spending caps)
+│       └── 20260607000000_vendor_tolerance/    Adds VendorTolerance (per-vendor unusual-charge sensitivity, §9 A8)
 │   └── package.json            Deps: @anthropic-ai/sdk, googleapis, @prisma/client, express, cors, dotenv
 ├── web/                        Next.js web app (PRIMARY client) — deploys to Vercel
 │   ├── app/
@@ -223,6 +225,16 @@ model Budget {                     // monthly spending budget, per category or '
   @@unique([userId, category])
 }
 
+model VendorTolerance {            // per-vendor unusual-charge sensitivity (§9 A8)
+  id         String   @id @default(cuid())
+  userId     String
+  vendor     String
+  multiplier Float                 // spike test = charge >= median(priors) * multiplier; default 3, absent row = default
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  @@unique([userId, vendor])
+}
+
 model Session {                    // bearer session granted after OAuth — only the token HASH is stored
   id        String   @id @default(cuid())
   userId    String
@@ -266,7 +278,7 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | POST | `/emails/sync` | `{userId, lookbackDays?, maxEmails?}` → pull the next batch of UNprocessed emails (walks older across passes), extract, persist. Returns `{synced, total, examinedCount, oldestDate, caughtUp}`. Cooldown only once `caughtUp`; 429 if cooling down; 401/403 `{reauth}` on expired token / missing Gmail scope |
 | GET | `/wrapped/:userId?year=&from=&to=` | Full Wrapped stats, scoped to all-time (default), a calendar `year`, or a custom `from`/`to` window (inclusive ISO dates; takes precedence over `year`). Returns `availableYears` + `availableMonths` for the scope picker |
 | GET | `/export/:userId` | Streams an `.xlsx` workbook (Transactions, Subscriptions, Marketing, Summary sheets) |
-| GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
+| GET | `/monitor/:userId?period=month\|year` | Period-over-period monitoring deck: KPI deltas, 12-month trends, subscription/inbox monitors, auto-flags, structured `anomalies` (gradeable unusual charges, §9 A8), plus a plain-language `trend` block (MoM + YoY spend change, independent of the toggle) |
 | GET | `/transactions/:userId` | All extracted records (newest first) incl. `emailId` + `categoryLocked`, for the Audit view + Gmail deep links |
 | PATCH | `/transactions/:userId/:id` | `{category?, vendor?}` → manually correct a record's category and/or vendor (ownership-scoped). Category is validated against `CATEGORIES` and sets `categoryLocked`; vendor is trimmed + capped at 120 chars |
 | POST | `/transactions/:userId/rename-vendor` | `{from, to}` → rename every record with vendor `from` to `to` (ownership-scoped). Powers the Audit "rename all" prompt |
@@ -274,6 +286,9 @@ model LoginCode {                  // single-use, short-lived handoff code (OAut
 | GET | `/promotions/:userId` | Active marketing offers (have a promo code, discount, or future expiry; expired ones dropped), soonest-expiry first — powers the Promotions tab |
 | GET | `/budgets/:userId` | `{budgets: {category: amount}}` — the user's monthly budgets (per category or `overall`, USD) |
 | PUT | `/budgets/:userId` | `{category, amount}` → upsert a monthly budget (amount ≤ 0 removes it; category validated against `CATEGORIES`+`overall`). The Monitor computes this-month progress + over/near-budget flags |
+| GET | `/tolerances/:userId` | `{tolerances: {vendor: multiplier}}` — per-vendor unusual-charge sensitivity (§9 A8) |
+| PUT | `/tolerances/:userId` | `{vendor, expected, ratio?}` → grade an unusual-charge alert. `expected:true` raises the vendor's bar just above the accepted charge; `false` tightens it to WATCH. Feeds `computeMonitor`'s spike detection |
+| DELETE | `/tolerances/:userId/:vendor` | Reset a vendor to the default sensitivity (3×) |
 | GET | `/acceptances/:userId` | Vendors the user marked "Accepted" → `{vendors: string[]}` |
 | POST | `/acceptances/:userId` | `{vendor, accepted}` → toggle, returns updated `{vendors}` (cross-device) |
 | POST | `/access/request` | `{email}` → records an access request, pings owner via `ACCESS_WEBHOOK_URL` |

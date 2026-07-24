@@ -7,6 +7,7 @@ import { computeStats } from './stats'
 import { normalizeToUsd } from './fx'
 import { computeRenewals, type Renewal } from './renewals'
 import { computeSubHealth, type SubHealth } from './subhealth'
+import { multiplierFor } from './tolerance'
 
 export interface BudgetInput { category: string; amount: number }
 export interface BudgetProgress {
@@ -28,6 +29,19 @@ export interface KpiPair {
 export interface MonitorFlag {
   kind: 'up' | 'down' | 'new' | 'info'
   text: string
+}
+
+// A structured unusual-charge alert (§9 A8). `spike` carries the vendor's own
+// median and the multiplier that let it through, so the UI can explain *why*
+// this was flagged and offer Expected / Not expected. `new` has no history to
+// compare against, so its numeric fields are null.
+export interface Anomaly {
+  kind: 'spike' | 'new'
+  vendor: string
+  amount: number // USD, the largest current-period charge from this vendor
+  median: number | null // the vendor's median prior charge (USD)
+  ratio: number | null // amount ÷ median
+  multiplier: number | null // the sensitivity in force when this fired
 }
 
 // A spend comparison between two periods (for the plain-language trend section).
@@ -73,6 +87,7 @@ export interface MonitorData {
   topSenders: { vendor: string; count: number; prevCount: number }[]
   budgets: BudgetProgress[]
   flags: MonitorFlag[]
+  anomalies: Anomaly[] // structured unusual charges — the A8 feedback panel
   // Plain-language spend trend, independent of the month/year toggle.
   trend: {
     mom: TrendChange | null // most recent month vs the month before
@@ -223,9 +238,19 @@ const median = (nums: number[]): number => {
 }
 
 // Flag charges that stand out: a charge much larger than the vendor's historical
-// norm (>=3 prior charges, >=3x the median), or a brand-new vendor this period.
-// Operates on USD-normalized entries; capped to keep the flag strip readable.
-function computeUnusual(entries: LedgerEntry[], curEntries: LedgerEntry[], curBase: Date, period: Period): MonitorFlag[] {
+// norm (>=3 prior charges, >= the vendor's multiplier × the median), or a
+// brand-new vendor this period. Operates on USD-normalized entries.
+//
+// Returns both the flag strip text (capped, for readability) and the structured
+// `anomalies` the UI attaches Expected / Not expected buttons to (§9 A8) — the
+// UI must never have to parse the flag strings.
+function computeUnusual(
+  entries: LedgerEntry[],
+  curEntries: LedgerEntry[],
+  curBase: Date,
+  period: Period,
+  tolerances: Record<string, number> = {},
+): { flags: MonitorFlag[]; anomalies: Anomaly[] } {
   const priorByVendor: Record<string, number[]> = {}
   for (const e of entries) {
     if (!isSpend(e) || e.amount == null || e.amount <= 0) continue
@@ -239,31 +264,44 @@ function computeUnusual(entries: LedgerEntry[], curEntries: LedgerEntry[], curBa
     curMax[e.vendor] = Math.max(curMax[e.vendor] ?? 0, e.amount)
   }
 
-  const spikes: { vendor: string; amount: number; ratio: number }[] = []
-  const fresh: { vendor: string; amount: number }[] = []
+  const spikes: Anomaly[] = []
+  const fresh: Anomaly[] = []
   for (const [vendor, amount] of Object.entries(curMax)) {
     const prior = priorByVendor[vendor]
     if (!prior || prior.length === 0) {
-      if (amount >= 40) fresh.push({ vendor, amount }) // new vendor, ignore tiny one-offs
+      // New vendor, ignore tiny one-offs. There's no history to be personal
+      // about yet, so tolerance doesn't apply here.
+      if (amount >= 40) fresh.push({ kind: 'new', vendor, amount: round2(amount), median: null, ratio: null, multiplier: null })
       continue
     }
     if (prior.length >= 3) {
       const med = median(prior)
-      if (med > 0 && amount >= med * 3) spikes.push({ vendor, amount, ratio: amount / med })
+      const multiplier = multiplierFor(tolerances, vendor)
+      if (med > 0 && amount >= med * multiplier) {
+        spikes.push({
+          kind: 'spike',
+          vendor,
+          amount: round2(amount),
+          median: round2(med),
+          ratio: round1(amount / med),
+          multiplier,
+        })
+      }
     }
   }
 
   const flags: MonitorFlag[] = []
-  spikes.sort((a, b) => b.ratio - a.ratio)
+  spikes.sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0))
   for (const s of spikes.slice(0, 3)) {
-    flags.push({ kind: 'up', text: `⚠️ ${s.vendor} $${Math.round(s.amount)} — ${Math.round(s.ratio)}× your usual` })
+    flags.push({ kind: 'up', text: `⚠️ ${s.vendor} $${Math.round(s.amount)} — ${Math.round(s.ratio ?? 0)}× your usual` })
   }
   fresh.sort((a, b) => b.amount - a.amount)
   const periodWord = period === 'year' ? 'this year' : 'this period'
   for (const n of fresh.slice(0, 2)) {
     flags.push({ kind: 'new', text: `New vendor ${periodWord}: ${n.vendor} $${Math.round(n.amount)}` })
   }
-  return flags
+  // The panel shows more than the strip does, but stays bounded.
+  return { flags, anomalies: [...spikes, ...fresh].slice(0, 12) }
 }
 
 export function computeMonitor(
@@ -272,6 +310,7 @@ export function computeMonitor(
   rates: Record<string, number> = { USD: 1 },
   now = new Date(),
   budgets: BudgetInput[] = [],
+  tolerances: Record<string, number> = {}, // vendor → personal spike multiplier
 ): MonitorData {
   // Normalize amounts to USD up front so every KPI, trend, and subscription
   // figure below is single-currency.
@@ -388,8 +427,10 @@ export function computeMonitor(
     const amt = r.amount != null ? ` ($${r.amount.toFixed(2)})` : ''
     flags.push({ kind: 'info', text: `${r.vendor} renews ${when}${amt}` })
   }
-  // Unusual-charge alerts (spikes vs a vendor's norm + brand-new vendors).
-  flags.push(...computeUnusual(entries, curEntries, curBase, period))
+  // Unusual-charge alerts (spikes vs a vendor's norm + brand-new vendors),
+  // sensitivity per the user's own Expected / Not expected feedback (§9 A8).
+  const unusual = computeUnusual(entries, curEntries, curBase, period, tolerances)
+  flags.push(...unusual.flags)
 
   // Budget alerts (current month).
   const budgetProgress = computeBudgets(entries, budgets, now)
@@ -428,6 +469,7 @@ export function computeMonitor(
     topSenders,
     budgets: budgetProgress,
     flags,
+    anomalies: unusual.anomalies,
     trend: computeTrend(entries),
   }
 }

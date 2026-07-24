@@ -29,6 +29,7 @@ import type {
   Promotion,
   PriceStep,
   SubHealth,
+  Anomaly,
 } from './types'
 
 export const DEMO_USER_ID = 'demo'
@@ -140,6 +141,9 @@ function buildLedger(): Transaction[] {
     })
   }
   push({ category: 'order', vendor: 'Apple Store', date: daysAgo(212), amount: 1999, description: 'MacBook Pro 14" (M-series)', senderEmail: 'no_reply@email.apple.com' })
+  // A deterministic current-month Amazon spike so the A8 "Unusual Charges" panel
+  // always has a real, gradeable alert in demo mode (Amazon's ~$58 median × ~6).
+  push({ category: 'order', vendor: 'Amazon', date: new Date(NOW.getFullYear(), NOW.getMonth(), 1, 12), amount: 349, description: 'Robot vacuum (unplanned splurge)', senderEmail: 'auto-confirm@amazon.com' })
   push({ category: 'order', vendor: 'Etsy', date: daysAgo(96), amount: 68, currency: 'EUR', description: 'Handmade ceramic mug set (Lisbon seller)', senderEmail: 'transaction@etsy.com' })
 
   // 3. Clothes
@@ -240,6 +244,48 @@ export function demoTransactions(): Transaction[] {
 
 const usd = (t: Transaction) => t.amountUsd ?? t.amount ?? 0
 const dt = (t: Transaction) => new Date(t.date)
+
+const demoMedian = (nums: number[]): number => {
+  if (nums.length === 0) return 0
+  const s = [...nums].sort((a, b) => a - b)
+  return s[Math.floor(s.length / 2)]
+}
+
+// Client-side port of the backend's computeUnusual (lib/monitor.ts) so the A8
+// panel has real, self-consistent alerts in demo mode: a spike is a current-
+// period charge ≥ 3× (the default multiplier) a vendor's median of ≥3 priors;
+// a "new" alert is a first-seen vendor spending ≥$40. No tolerance state in
+// demo — grading is a no-op — so the default 3× is always in force.
+function demoAnomalies(all: Transaction[], curBase: Date): Anomaly[] {
+  const priorByVendor: Record<string, number[]> = {}
+  const curMax: Record<string, number> = {}
+  for (const t of all) {
+    if (!SPEND.has(t.category)) continue
+    const amt = usd(t)
+    if (amt <= 0) continue
+    if (dt(t) < curBase) (priorByVendor[t.vendor] ??= []).push(amt)
+    else curMax[t.vendor] = Math.max(curMax[t.vendor] ?? 0, amt)
+  }
+
+  const spikes: Anomaly[] = []
+  const fresh: Anomaly[] = []
+  for (const [vendor, amount] of Object.entries(curMax)) {
+    const prior = priorByVendor[vendor]
+    if (!prior || prior.length === 0) {
+      if (amount >= 40) fresh.push({ kind: 'new', vendor, amount: round2(amount), median: null, ratio: null, multiplier: null })
+      continue
+    }
+    if (prior.length >= 3) {
+      const med = demoMedian(prior)
+      if (med > 0 && amount >= med * 3) {
+        spikes.push({ kind: 'spike', vendor, amount: round2(amount), median: round2(med), ratio: Math.round((amount / med) * 10) / 10, multiplier: 3 })
+      }
+    }
+  }
+  spikes.sort((a, b) => (b.ratio ?? 0) - (a.ratio ?? 0))
+  fresh.sort((a, b) => b.amount - a.amount)
+  return [...spikes, ...fresh].slice(0, 12)
+}
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 const factUsd = (n: number) => '$' + Math.round(n).toLocaleString('en-US')
@@ -611,6 +657,7 @@ export function demoMonitor(period: 'month' | 'year'): MonitorData {
     topSenders,
     budgets,
     flags,
+    anomalies: demoAnomalies(all, period === 'month' ? new Date(NOW.getFullYear(), NOW.getMonth(), 1) : new Date(NOW.getFullYear(), 0, 1)),
     trend: {
       mom: mkTrend(monthName(prevKey), monthName(curKey), momFrom, momTo),
       yoy: mkTrend(monthName(yoyKey), monthName(curKey), yoyFrom, momTo),

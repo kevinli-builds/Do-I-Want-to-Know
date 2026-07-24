@@ -20,9 +20,10 @@ router.get('/:userId', asyncHandler(async (req, res) => {
 
   const period: Period = req.query.period === 'year' ? 'year' : 'month'
 
-  const [entries, budgetRows, rates] = await Promise.all([
+  const [entries, budgetRows, toleranceRows, rates] = await Promise.all([
     prisma.ledgerEntry.findMany({ where: { userId }, orderBy: { date: 'desc' } }),
     prisma.budget.findMany({ where: { userId } }),
+    prisma.vendorTolerance.findMany({ where: { userId } }),
     getUsdRates(),
   ])
 
@@ -31,11 +32,14 @@ router.get('/:userId', asyncHandler(async (req, res) => {
   }
 
   const budgets = budgetRows.map(b => ({ category: b.category, amount: b.amount }))
+  const tolerances: Record<string, number> = {}
+  for (const t of toleranceRows) tolerances[t.vendor] = t.multiplier
+
   res.json({
     connected: true,
     email: user.email,
     empty: false,
-    ...computeMonitor(entries, period, rates, new Date(), budgets),
+    ...computeMonitor(entries, period, rates, new Date(), budgets, tolerances),
   })
 }))
 

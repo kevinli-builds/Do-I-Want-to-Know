@@ -92,6 +92,7 @@ router.delete('/me', requireSession, async (req, res) => {
       prisma.processedEmail.deleteMany({ where: { userId } }),
       prisma.acceptance.deleteMany({ where: { userId } }),
       prisma.budget.deleteMany({ where: { userId } }),
+      prisma.vendorTolerance.deleteMany({ where: { userId } }),
       prisma.loginCode.deleteMany({ where: { userId } }),
       prisma.session.deleteMany({ where: { userId } }),
       prisma.oAuthToken.deleteMany({ where: { userId } }),

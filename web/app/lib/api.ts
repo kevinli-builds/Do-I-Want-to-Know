@@ -103,6 +103,24 @@ export async function setBudget(userId: string, category: string, amount: number
   if (!res.ok) throw new Error('Could not save budget')
 }
 
+// ── Unusual-charge feedback (§9 A8) ──────────────────────────────────────────
+// Grading an alert stores a per-vendor sensitivity, so future alerts get
+// personal. `ratio` lets the backend put the new bar just above this charge.
+export async function setTolerance(
+  userId: string,
+  vendor: string,
+  expected: boolean,
+  ratio: number | null,
+): Promise<void> {
+  if (demoMode) return
+  const res = await authedFetch(`${API}/tolerances/${encodeURIComponent(userId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ vendor, expected, ratio }),
+  })
+  if (!res.ok) throw new Error('Could not save that')
+}
+
 // ── Monitor deck ─────────────────────────────────────────────────────────────
 export async function getMonitor(userId: string, period: 'month' | 'year'): Promise<MonitorData> {
   if (demoMode) return demoMonitor(period)

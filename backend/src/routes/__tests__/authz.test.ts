@@ -17,6 +17,7 @@ vi.mock('../../lib/prisma', () => ({
     ledgerEntry: { findMany: vi.fn(async () => []) },
     budget: { findMany: vi.fn(async () => []) },
     acceptance: { findMany: vi.fn(async () => []) },
+    vendorTolerance: { findMany: vi.fn(async () => []) },
   },
 }))
 
@@ -29,6 +30,7 @@ import { upcomingRouter } from '../upcoming'
 import { promotionsRouter } from '../promotions'
 import { acceptancesRouter } from '../acceptances'
 import { exportRouter } from '../export'
+import { tolerancesRouter } from '../tolerances'
 
 // Spin up a throwaway server mounting one router, make one request, return status.
 async function hit(router: Router, path: string, token = 'any-token'): Promise<number> {
@@ -61,6 +63,7 @@ const ALL_ROUTERS: [string, Router][] = [
   ['promotions', promotionsRouter],
   ['acceptances', acceptancesRouter],
   ['export', exportRouter],
+  ['tolerances', tolerancesRouter],
 ]
 
 describe('enforceOwnership (param guard unit)', () => {

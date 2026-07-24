@@ -1,7 +1,7 @@
 'use client'
 
 import { Fragment, useCallback, useEffect, useState } from 'react'
-import { getMonitor, setBudget, gmailMessageUrl, safeHref, type MonitorData, type KpiPair, type TrendChange, type SubHealth } from '../lib/api'
+import { getMonitor, setBudget, setTolerance, gmailMessageUrl, safeHref, type Anomaly, type MonitorData, type KpiPair, type TrendChange, type SubHealth } from '../lib/api'
 import { money as moneyFull, moneyWhole as money } from '../lib/format'
 import { fmtDate, relativeDay } from '../lib/dates'
 import { catLabel, CATEGORY_KEYS } from '../lib/categories'
@@ -137,6 +137,74 @@ function SubHealthPanel({ health, onOpenVendor }: { health: SubHealth; onOpenVen
   )
 }
 
+// Unusual-charge alerts, gradeable (§9 A8). Each spike explains itself — the
+// vendor's own median and the multiplier that let it through — and grading it
+// stores a per-vendor sensitivity so the next period's alerts are personal.
+// Brand-new vendors are shown but not gradeable: there's no history yet.
+function AnomalyPanel({
+  anomalies,
+  graded,
+  onGrade,
+  onOpenVendor,
+}: {
+  anomalies: Anomaly[]
+  graded: Record<string, 'expected' | 'watch'>
+  onGrade: (a: Anomaly, expected: boolean) => void
+  onOpenVendor?: (v: string) => void
+}) {
+  if (anomalies.length === 0) return null
+  return (
+    <div className="card">
+      <h2>🔍 Unusual Charges</h2>
+      {anomalies.map(a => {
+        const mark = graded[a.vendor]
+        return (
+          <div className="anom" key={`${a.kind}-${a.vendor}`}>
+            <div className="anom-head">
+              <span className="anom-vendor">
+                {a.kind === 'spike' ? '⚠️' : '🆕'} {a.vendor}
+                {onOpenVendor && <VendorButton vendor={a.vendor} onOpen={onOpenVendor} />}
+              </span>
+              <span className="anom-amount">{moneyFull(a.amount)}</span>
+            </div>
+            <div className="anom-why">
+              {a.kind === 'spike' ? (
+                <>
+                  {a.ratio}× your usual {moneyFull(a.median ?? 0)} from them
+                  {a.multiplier != null && a.multiplier !== 3 && (
+                    <span className="anom-tuned"> · your setting: flag over {a.multiplier}×</span>
+                  )}
+                </>
+              ) : (
+                <>First charge we&rsquo;ve seen from this vendor.</>
+              )}
+            </div>
+            {a.kind === 'spike' && (
+              <div className="anom-actions no-print">
+                {mark ? (
+                  <span className="anom-done">
+                    {mark === 'expected'
+                      ? '✓ Noted — we’ll stop flagging charges like this'
+                      : '✓ Noted — we’ll watch this vendor more closely'}
+                  </span>
+                ) : (
+                  <>
+                    <button className="anom-btn" onClick={() => onGrade(a, true)}>Expected</button>
+                    <button className="anom-btn warn" onClick={() => onGrade(a, false)}>Not expected</button>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )
+      })}
+      <p className="chart-caption" style={{ textAlign: 'left', margin: '8px 0 0' }}>
+        Compared only against your own history with each vendor — never against anyone else.
+      </p>
+    </div>
+  )
+}
+
 export function MonitorView({ userId, refreshKey = 0, onOpenVendor }: { userId: string; refreshKey?: number; onOpenVendor?: (v: string) => void }) {
   const [period, setPeriod] = useState<'month' | 'year'>('month')
   const [data, setData] = useState<MonitorData | null>(null)
@@ -158,6 +226,20 @@ export function MonitorView({ userId, refreshKey = 0, onOpenVendor }: { userId: 
     }
   }, [userId])
 
+  // Unusual-charge feedback (§9 A8). Graded vendors are acknowledged inline
+  // rather than vanishing — the alert's numbers stay readable after judging,
+  // and the sensitivity change shows up on the next Monitor load.
+  const [graded, setGraded] = useState<Record<string, 'expected' | 'watch'>>({})
+
+  const gradeAnomaly = useCallback(async (a: Anomaly, expected: boolean) => {
+    setGraded(g => ({ ...g, [a.vendor]: expected ? 'expected' : 'watch' }))
+    try {
+      await setTolerance(userId, a.vendor, expected, a.ratio)
+    } catch {
+      setGraded(g => { const n = { ...g }; delete n[a.vendor]; return n }) // revert
+    }
+  }, [userId])
+
   // Budget editor
   const [bCat, setBCat] = useState('overall')
   const [bAmt, setBAmt] = useState('')
@@ -175,7 +257,9 @@ export function MonitorView({ userId, refreshKey = 0, onOpenVendor }: { userId: 
     try { await setBudget(userId, category, 0); await load(period) } catch { /* ignore */ }
   }
 
-  useEffect(() => { load(period) }, [load, period, refreshKey])
+  // A fresh load (period switch or post-sync) reflects the stored tolerances, so
+  // clear the local "just graded" acknowledgements and read the server's truth.
+  useEffect(() => { load(period); setGraded({}) }, [load, period, refreshKey])
 
   if (loading) {
     return (
@@ -409,6 +493,14 @@ export function MonitorView({ userId, refreshKey = 0, onOpenVendor }: { userId: 
 
       {/* Subscription health — price-step history, burn delta, zombie subs */}
       {subs.health && <SubHealthPanel health={subs.health} onOpenVendor={onOpenVendor} />}
+
+      {/* Unusual charges — gradeable, so alerts get personal over time (A8) */}
+      <AnomalyPanel
+        anomalies={data.anomalies ?? []}
+        graded={graded}
+        onGrade={gradeAnomaly}
+        onOpenVendor={onOpenVendor}
+      />
 
       {/* Inbox-load monitor */}
       {data.topSenders && data.topSenders.length > 0 && (
